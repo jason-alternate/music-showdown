@@ -29,7 +29,7 @@ import type { GameState, Player, YouTubeVideo, GuessInfo, GuessLogEntry } from "
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
 
 type Settings = GameState["settings"];
 
@@ -186,11 +186,11 @@ export default function GameBoard({
   }, [timeRemaining, phase, currentSongOwnerId]);
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-    currentSongOwnerId &&
-    effectivePlayerId &&
-    currentSongOwnerId !== effectivePlayerId &&
-    !hasCorrectGuess &&
-    (rawTimer === null || rawTimer > 0),
+      currentSongOwnerId &&
+      effectivePlayerId &&
+      currentSongOwnerId !== effectivePlayerId &&
+      !hasCorrectGuess &&
+      (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -635,7 +635,6 @@ export default function GameBoard({
               )}
             </CardContent>
           </Card>
-
         </div>
       </div>
     );
@@ -969,12 +968,13 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
+                    className={`flex items-center gap-4 p-6 rounded-lg ${
+                      index === 0
                         ? "bg-primary/20 border-2 border-primary"
                         : index === 1
                           ? "bg-secondary/20 border-2 border-secondary"
                           : "bg-muted/50"
-                      }`}
+                    }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">

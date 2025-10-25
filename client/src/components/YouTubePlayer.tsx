@@ -94,7 +94,7 @@ export function YouTubePlayer({
         className="pointer-events-none w-full h-full"
         data-testid="youtube-player"
       />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-full bg-linear-to-b from-black/90 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 rounded-lg bg-linear-to-b from-black/95 via-black/80 to-black/50" />
     </div>
   );
 }

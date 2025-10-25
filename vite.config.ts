@@ -15,7 +15,7 @@ export default defineConfig({
     "process.env.PLAYWRIGHT": JSON.stringify(process.env.PLAYWRIGHT ?? ""),
   },
   build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
+    outDir: path.resolve(import.meta.dirname, "dist"),
     emptyOutDir: true,
   },
   server: {
