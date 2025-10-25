@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Redirecting…</title>
+    <meta http-equiv="refresh" content="0; url=/music-showdown/" />
+    <script>
+      // SPA fallback for GitHub Pages
+      if (sessionStorage) {
+        sessionStorage.redirect = location.pathname + location.search + location.hash;
+      }
+      location.replace("/music-showdown/" + location.search + location.hash);
+    </script>
+  </head>
+  <body>
+    Redirecting to <a href="/music-showdown/">/music-showdown/</a>…
+  </body>
+</html>
