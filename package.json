@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
+    "build": "tsc && vite build --base=/music-showdown/",
+    "preview": "vite preview --base=/music-showdown/",
     "typecheck": "tsc --noEmit",
     "fmt": "biome format --write .",
     "lint": "biome lint --fix .",
     "check": "biome check .",
     "knip": "knip",
-    "test:playwright": "playwright test"
+    "test:playwright": "playwright test",
+    "release": "npm run fmt && npm run build && gh-pages --dist dist"
   },
   "dependencies": {
     "@boardgame.io/p2p": "^0.4.4",

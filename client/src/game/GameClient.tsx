@@ -20,7 +20,9 @@ export interface BoardIdentityHelpers {
   promoteToHost: (preferredName?: string) => void;
 }
 
-export type BoardWithIdentity = (props: BoardProps<GameState> & BoardIdentityHelpers) => JSX.Element;
+export type BoardWithIdentity = (
+  props: BoardProps<GameState> & BoardIdentityHelpers,
+) => JSX.Element;
 
 const readPlayerName = () => {
   if (typeof window === "undefined") return "Player";
@@ -64,7 +66,9 @@ interface GameClientProps {
 }
 
 export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
-  const [identity, setIdentity] = useState<LocalIdentity>(() => getInitialIdentity(roomCode, defaultRole));
+  const [identity, setIdentity] = useState<LocalIdentity>(() =>
+    getInitialIdentity(roomCode, defaultRole),
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {

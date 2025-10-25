@@ -38,7 +38,7 @@ export default function Home() {
       sessionStorage.setItem("musicshowdown.pendingRole", "host");
       sessionStorage.setItem("musicshowdown.lastRole", "host");
     }
-    navigate({ to: "/game/$roomCode", params: { roomCode: newRoomCode } });
+    navigate({ to: "/music-showdown/game/$roomCode", params: { roomCode: newRoomCode } });
   };
 
   const handleJoinRoom = () => {
@@ -57,7 +57,10 @@ export default function Home() {
       sessionStorage.setItem("musicshowdown.pendingRole", "peer");
       sessionStorage.setItem("musicshowdown.lastRole", "peer");
     }
-    navigate({ to: "/game/$roomCode", params: { roomCode: roomCode.toUpperCase() } });
+    navigate({
+      to: "/music-showdown/game/$roomCode",
+      params: { roomCode: roomCode.toUpperCase() },
+    });
   };
 
   return (
@@ -210,7 +213,9 @@ export default function Home() {
           </div>
         </div>
       </div>
-      <a href="https://www.flaticon.com/free-icons/music-note" title="music note icons">Music note icons created by Freepik - Flaticon</a>
+      <a href="https://www.flaticon.com/free-icons/music-note" title="music note icons">
+        Music note icons created by Freepik - Flaticon
+      </a>
     </div>
   );
 }

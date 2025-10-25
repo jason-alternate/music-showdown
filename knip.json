@@ -6,10 +6,6 @@
     "client/src/App.tsx",
     "client/src/pages/*.{ts,tsx}"
   ],
-  "project": [
-    "client/src/**/*.{ts,tsx}"
-  ],
-  "ignore": [
-    "client/src/index.css"
-  ]
+  "project": ["client/src/**/*.{ts,tsx}"],
+  "ignore": ["client/src/index.css"]
 }

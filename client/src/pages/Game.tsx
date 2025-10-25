@@ -12,7 +12,18 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Timer } from "@/components/Timer";
 import { YouTubeSearch } from "@/components/YouTubeSearch";
 import { YouTubePlayer } from "@/components/YouTubePlayer";
-import { Trophy, CheckCircle, Circle, Music, Copy, Check, Crown, Clock, Home, MessageSquare } from "lucide-react";
+import {
+  Trophy,
+  CheckCircle,
+  Circle,
+  Music,
+  Copy,
+  Check,
+  Crown,
+  Clock,
+  Home,
+  MessageSquare,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { GameState, Player, YouTubeVideo, GuessInfo, GuessLogEntry } from "@/schema";
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
@@ -94,7 +105,7 @@ export default function GameBoard({
   const effectivePlayerId = playerID ?? identity.playerID;
 
   const handleGoHome = () => {
-    navigate({ to: "/" });
+    navigate({ to: "/music-showdown" });
   };
 
   const headerControls = (
@@ -160,9 +171,13 @@ export default function GameBoard({
   const correctGuessers = currentRound?.correctGuessers ?? {};
   const guessLog = currentRound?.guessLog ?? [];
   const currentSongOwnerId = currentRound?.currentPlayerId ?? null;
-  const currentSong = currentSongOwnerId ? currentRound?.songSelections?.[currentSongOwnerId] ?? null : null;
-  const mySelection = effectivePlayerId ? currentRound?.songSelections?.[effectivePlayerId] ?? null : null;
-  const myGuessEntries: GuessInfo[] = effectivePlayerId ? guesses[effectivePlayerId] ?? [] : [];
+  const currentSong = currentSongOwnerId
+    ? (currentRound?.songSelections?.[currentSongOwnerId] ?? null)
+    : null;
+  const mySelection = effectivePlayerId
+    ? (currentRound?.songSelections?.[effectivePlayerId] ?? null)
+    : null;
+  const myGuessEntries: GuessInfo[] = effectivePlayerId ? (guesses[effectivePlayerId] ?? []) : [];
   const lastMyGuess = myGuessEntries[myGuessEntries.length - 1] ?? null;
   const hasCorrectGuess = Boolean(effectivePlayerId && correctGuessers[effectivePlayerId]);
 
@@ -171,11 +186,11 @@ export default function GameBoard({
   }, [timeRemaining, phase, currentSongOwnerId]);
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-      currentSongOwnerId &&
-      effectivePlayerId &&
-      currentSongOwnerId !== effectivePlayerId &&
-      !hasCorrectGuess &&
-      (rawTimer === null || rawTimer > 0),
+    currentSongOwnerId &&
+    effectivePlayerId &&
+    currentSongOwnerId !== effectivePlayerId &&
+    !hasCorrectGuess &&
+    (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -322,7 +337,6 @@ export default function GameBoard({
     if (!canSubmitGuess || !trimmed) return;
     moves.submitGuess?.(trimmed);
     setGuess("");
-    toast({ title: "Guess submitted", description: "Waiting for results..." });
   };
 
   const handleNextRound = () => {
@@ -419,11 +433,23 @@ export default function GameBoard({
             <CardHeader className="text-center">
               <CardTitle className="text-2xl font-heading mb-2">Room Code</CardTitle>
               <div className="flex items-center justify-center gap-4">
-                <code className="text-5xl font-mono font-bold tracking-wider text-primary" data-testid="text-room-code">
+                <code
+                  className="text-5xl font-mono font-bold tracking-wider text-primary"
+                  data-testid="text-room-code"
+                >
                   {matchID}
                 </code>
-                <Button variant="ghost" size="icon" onClick={handleCopyCode} data-testid="button-copy-code">
-                  {copied ? <Check className="w-5 h-5 text-secondary" /> : <Copy className="w-5 h-5" />}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleCopyCode}
+                  data-testid="button-copy-code"
+                >
+                  {copied ? (
+                    <Check className="w-5 h-5 text-secondary" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
                 </Button>
               </div>
               <CardDescription>Share this code with friends to join</CardDescription>
@@ -440,7 +466,9 @@ export default function GameBoard({
                   onKeyDown={(event) => event.key === "Enter" && handlePlayerNameCommit()}
                   data-testid="input-player-name"
                 />
-                <p className="text-xs text-muted-foreground">Shared with other players in the lobby.</p>
+                <p className="text-xs text-muted-foreground">
+                  Shared with other players in the lobby.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>
@@ -574,7 +602,9 @@ export default function GameBoard({
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="font-heading text-2xl">Set the Theme</CardTitle>
-              <CardDescription>Waiting on the host to set the theme for this round.</CardDescription>
+              <CardDescription>
+                Waiting on the host to set the theme for this round.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -606,38 +636,6 @@ export default function GameBoard({
             </CardContent>
           </Card>
 
-          {currentRound && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading text-lg flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" /> Guess Log
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {sortedGuessLog.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No guesses recorded this round.</p>
-                ) : (
-                  sortedGuessLog.map((entry) => (
-                    <div key={entry.id} className="space-y-1">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="text-sm font-medium">
-                          {entry.playerName}
-                          {entry.isCorrect && <Badge className="ml-2">Correct</Badge>}
-                        </div>
-                        <span className="text-xs text-muted-foreground">
-                          Song {entry.songIndex + 1} • {formatGuessTime(entry.time)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-muted-foreground">"{entry.guess}"</div>
-                      {entry.songOwnerName && (
-                        <div className="text-xs text-muted-foreground">Selected by {entry.songOwnerName}</div>
-                      )}
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
     );
@@ -655,7 +653,10 @@ export default function GameBoard({
                   <div>
                     <CardTitle className="font-heading text-2xl mb-1">Pick Your Song</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Theme: <span className="font-semibold text-foreground">{currentRound?.theme ?? "Pending"}</span>
+                      Theme:{" "}
+                      <span className="font-semibold text-foreground">
+                        {currentRound?.theme ?? "Pending"}
+                      </span>
                     </p>
                   </div>
                   <Timer timeRemaining={timeRemaining} totalTime={settings.pickTimerDuration} />
@@ -751,11 +752,16 @@ export default function GameBoard({
                 <div>
                   <CardTitle className="font-heading text-2xl">Guess the Song!</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {players.find((player) => player.id === currentSongOwnerId)?.name ?? "Mystery player"}
+                    {players.find((player) => player.id === currentSongOwnerId)?.name ??
+                      "Mystery player"}
                     's selection
                   </p>
                 </div>
-                <Timer timeRemaining={timeRemaining} totalTime={settings.playbackDuration} variant="accent" />
+                <Timer
+                  timeRemaining={timeRemaining}
+                  totalTime={settings.playbackDuration}
+                  variant="accent"
+                />
               </div>
             </CardHeader>
           </Card>
@@ -793,7 +799,9 @@ export default function GameBoard({
                 <p className="text-sm text-muted-foreground">You can't guess your own song.</p>
               )}
               {!canSubmitGuess && hasCorrectGuess && (
-                <p className="text-sm text-muted-foreground">Great job! You'll rejoin next round.</p>
+                <p className="text-sm text-muted-foreground">
+                  Great job! You'll rejoin next round.
+                </p>
               )}
               {lastMyGuess && !hasCorrectGuess && (
                 <p className="text-xs text-muted-foreground">
@@ -862,7 +870,9 @@ export default function GameBoard({
                         {entry.playerName}
                         {entry.isCorrect && <Badge className="ml-2">Correct</Badge>}
                       </div>
-                      <span className="text-xs text-muted-foreground">{formatGuessTime(entry.time)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatGuessTime(entry.time)}
+                      </span>
                     </div>
                     <div className="text-sm text-muted-foreground">"{entry.guess}"</div>
                   </div>
@@ -910,7 +920,9 @@ export default function GameBoard({
                     <PlayerAvatar playerId={player.id} playerName={player.name} />
                     <div className="flex-1">
                       <div className="font-semibold">{player.name}</div>
-                      <div className="text-sm text-muted-foreground">{roundScore} points this round</div>
+                      <div className="text-sm text-muted-foreground">
+                        {roundScore} points this round
+                      </div>
                     </div>
                     <div className="text-2xl font-bold text-primary">{player.score}</div>
                   </div>
@@ -946,7 +958,9 @@ export default function GameBoard({
               <div className="text-center space-y-4">
                 <Trophy className="w-24 h-24 text-primary mx-auto" />
                 <h2 className="text-2xl font-bold">
-                  {totalLeaderboard[0] ? `${totalLeaderboard[0].name} Wins!` : "Thanks for playing!"}
+                  {totalLeaderboard[0]
+                    ? `${totalLeaderboard[0].name} Wins!`
+                    : "Thanks for playing!"}
                 </h2>
                 <p className="text-muted-foreground">Final standings</p>
               </div>
@@ -956,15 +970,21 @@ export default function GameBoard({
                   <div
                     key={player.id}
                     className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
-                      ? "bg-primary/20 border-2 border-primary"
-                      : index === 1
-                        ? "bg-secondary/20 border-2 border-secondary"
-                        : "bg-muted/50"
+                        ? "bg-primary/20 border-2 border-primary"
+                        : index === 1
+                          ? "bg-secondary/20 border-2 border-secondary"
+                          : "bg-muted/50"
                       }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">
-                      {index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `#${index + 1}`}
+                      {index === 0
+                        ? "🥇"
+                        : index === 1
+                          ? "🥈"
+                          : index === 2
+                            ? "🥉"
+                            : `#${index + 1}`}
                     </div>
                     <PlayerAvatar playerId={player.id} playerName={player.name} size="lg" />
                     <div className="flex-1">

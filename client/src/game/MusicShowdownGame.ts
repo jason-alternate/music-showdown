@@ -294,7 +294,9 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
           const randomApi = (ctx as CtxWithRandom).random;
           const logEntry = {
-            id: randomApi?.UUID ? randomApi.UUID() : `${G.currentRound.roundNumber}-${playerID}-${Date.now()}`,
+            id: randomApi?.UUID
+              ? randomApi.UUID()
+              : `${G.currentRound.roundNumber}-${playerID}-${Date.now()}`,
             playerId: playerID,
             playerName: G.players[playerID]?.name ?? `Player ${playerID}`,
             guess,

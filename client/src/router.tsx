@@ -11,13 +11,13 @@ export const rootRoute = createRootRoute({
 
 export const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/",
+  path: "/music-showdown/",
   component: Home,
 });
 
 export const gameRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/game/$roomCode",
+  path: "/music-showdown/game/$roomCode",
   component: () => {
     const { roomCode } = gameRoute.useParams();
     if (typeof window !== "undefined") {

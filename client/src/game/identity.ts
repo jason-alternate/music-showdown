@@ -132,7 +132,8 @@ export function upsertIdentity(
 
     if (!isValidPlayerId(updated.role, updated.playerID)) {
       usedIds.delete(updated.playerID);
-      updated.playerID = updated.role === "host" ? HOST_PLAYER_ID : allocatePeerId(roomCode, usedIds);
+      updated.playerID =
+        updated.role === "host" ? HOST_PLAYER_ID : allocatePeerId(roomCode, usedIds);
       updated.credentials = generateCredentials();
     }
 
