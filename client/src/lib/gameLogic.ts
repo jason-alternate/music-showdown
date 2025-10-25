@@ -1,0 +1,88 @@
+// Scoring algorithm: First correct guess gets most points, speed matters
+export function calculatePoints(
+  isCorrect: boolean,
+  guessTime: number,
+  maxTime: number,
+  isFirstCorrect: boolean,
+): number {
+  if (!isCorrect) return 0;
+
+  // Base points for correct guess
+  const basePoints = 100;
+
+  // Bonus for being first (50% bonus)
+  const firstBonus = isFirstCorrect ? 50 : 0;
+
+  // Speed bonus (up to 50 points based on how fast they guessed)
+  const timeRatio = 1 - guessTime / maxTime;
+  const speedBonus = Math.floor(timeRatio * 50);
+
+  return basePoints + firstBonus + speedBonus;
+}
+
+// Check if guess is correct (case-insensitive, fuzzy matching)
+export function isGuessCorrect(guess: string, answer: string): boolean {
+  const normalizedGuess = guess.toLowerCase().trim();
+  const normalizedAnswer = answer.toLowerCase().trim();
+
+  // Exact match
+  if (normalizedGuess === normalizedAnswer) return true;
+
+  // Remove common punctuation and extra spaces
+  const cleanGuess = normalizedGuess.replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+  const cleanAnswer = normalizedAnswer.replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
+
+  if (cleanGuess === cleanAnswer) return true;
+
+  // Check if guess contains answer or vice versa (for partial matches)
+  if (cleanGuess.includes(cleanAnswer) || cleanAnswer.includes(cleanGuess)) {
+    // Only accept if the length difference is not too large (prevents "a" matching "amazing song")
+    const lengthRatio =
+      Math.min(cleanGuess.length, cleanAnswer.length) /
+      Math.max(cleanGuess.length, cleanAnswer.length);
+    if (lengthRatio > 0.6) return true;
+  }
+
+  return false;
+}
+
+// Generate a random room code
+export function generateRoomCode(): string {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+// Get player avatar color based on player ID
+export function getPlayerColor(playerId: string): string {
+  const colors = [
+    "from-purple-500 to-pink-500",
+    "from-blue-500 to-cyan-500",
+    "from-green-500 to-emerald-500",
+    "from-orange-500 to-red-500",
+    "from-yellow-500 to-amber-500",
+    "from-indigo-500 to-purple-500",
+    "from-pink-500 to-rose-500",
+    "from-teal-500 to-green-500",
+  ];
+
+  // Simple hash function to get consistent color for same ID
+  let hash = 0;
+  for (let i = 0; i < playerId.length; i++) {
+    hash = playerId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  return colors[Math.abs(hash) % colors.length];
+}
+
+// Get player initials
+export function getPlayerInitials(name: string): string {
+  const words = name.trim().split(" ");
+  if (words.length >= 2) {
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
+}
