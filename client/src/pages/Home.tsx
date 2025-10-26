@@ -104,7 +104,9 @@ export default function Home() {
               <Card className="border border-emerald-200/60 bg-background/90 shadow-sm backdrop-blur-sm dark:border-emerald-800/60 dark:bg-card/90">
                 <CardHeader>
                   <CardTitle className="text-xl font-heading">2A. Host a new room</CardTitle>
-                  <CardDescription>Create a room and share the code with your friends.</CardDescription>
+                  <CardDescription>
+                    Create a room and share the code with your friends.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Button
@@ -149,9 +151,7 @@ export default function Home() {
 
           {/* How to Play */}
           <section className="mx-auto mt-16 max-w-5xl">
-            <h2 className="mb-8 text-center text-3xl font-heading font-bold">
-              How to Play
-            </h2>
+            <h2 className="mb-8 text-center text-3xl font-heading font-bold">How to Play</h2>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
               {[
                 {
@@ -190,7 +190,6 @@ export default function Home() {
               ))}
             </div>
           </section>
-
         </div>
       </div>
 

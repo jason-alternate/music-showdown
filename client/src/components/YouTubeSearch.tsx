@@ -65,7 +65,7 @@ export function YouTubeSearch({ onSelect, selectedVideoId }: YouTubeSearchProps)
                   "group cursor-pointer border transition-all hover:border-primary/40 hover:shadow-md",
                   selectedVideoId === video.id
                     ? "border-primary bg-primary/10 shadow-sm ring-2 ring-primary"
-                    : "border-border"
+                    : "border-border",
                 )}
                 onClick={() => onSelect(video)}
                 data-testid={`card-video-${video.id}`}

@@ -14,13 +14,26 @@ import { YouTubeSearch } from "@/components/YouTubeSearch";
 import { YouTubePlayer } from "@/components/YouTubePlayer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { Trophy, CheckCircle, Circle, Music, Copy, Check, Crown, MessageSquare, Clock, Loader2, Play, Pause } from "lucide-react";
+import {
+  Trophy,
+  CheckCircle,
+  Circle,
+  Music,
+  Copy,
+  Check,
+  Crown,
+  MessageSquare,
+  Clock,
+  Loader2,
+  Play,
+  Pause,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { GameState, Player, YouTubeVideo, GuessInfo, GuessLogEntry } from "@/schema";
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
 
 type Settings = GameState["settings"];
 
@@ -30,10 +43,14 @@ function toSliderValue(value: number) {
   return [value];
 }
 
-function computeMaxStartSeconds(durationSeconds: number | null | undefined, playbackDuration: number) {
-  const baseline = durationSeconds && Number.isFinite(durationSeconds) && durationSeconds > 0
-    ? Math.floor(durationSeconds)
-    : DEFAULT_MAX_START_SECONDS;
+function computeMaxStartSeconds(
+  durationSeconds: number | null | undefined,
+  playbackDuration: number,
+) {
+  const baseline =
+    durationSeconds && Number.isFinite(durationSeconds) && durationSeconds > 0
+      ? Math.floor(durationSeconds)
+      : DEFAULT_MAX_START_SECONDS;
   return Math.max(0, baseline - playbackDuration);
 }
 
@@ -123,7 +140,9 @@ export default function GameBoard({
   const [startSeconds, setStartSeconds] = useState(0);
   const [previewing, setPreviewing] = useState(false);
   const previewPlayerRef = useRef<any>(null);
-  const [maxStartSeconds, setMaxStartSeconds] = useState(() => computeMaxStartSeconds(null, settings.playbackDuration));
+  const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
+    computeMaxStartSeconds(null, settings.playbackDuration),
+  );
   const [guess, setGuess] = useState("");
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
   const [copied, setCopied] = useState(false);
@@ -141,7 +160,10 @@ export default function GameBoard({
   useEffect(() => {
     setLocalSettings(settings);
     setMaxStartSeconds((previousMax) => {
-      const recalculated = computeMaxStartSeconds(selectedVideo ? previewPlayerRef.current?.getDuration?.() : null, settings.playbackDuration);
+      const recalculated = computeMaxStartSeconds(
+        selectedVideo ? previewPlayerRef.current?.getDuration?.() : null,
+        settings.playbackDuration,
+      );
       const clamped = clampStartSeconds(startSeconds, recalculated);
       if (clamped !== startSeconds) {
         setStartSeconds(clamped);
@@ -234,11 +256,11 @@ export default function GameBoard({
 
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-    currentSongOwnerId &&
-    effectivePlayerId &&
-    currentSongOwnerId !== effectivePlayerId &&
-    !hasCorrectGuess &&
-    (rawTimer === null || rawTimer > 0),
+      currentSongOwnerId &&
+      effectivePlayerId &&
+      currentSongOwnerId !== effectivePlayerId &&
+      !hasCorrectGuess &&
+      (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -583,7 +605,11 @@ export default function GameBoard({
                 onClick={handleCopyCode}
                 data-testid="button-copy-code"
               >
-                {copied ? <Check className="h-5 w-5 text-secondary" /> : <Copy className="h-5 w-5" />}
+                {copied ? (
+                  <Check className="h-5 w-5 text-secondary" />
+                ) : (
+                  <Copy className="h-5 w-5" />
+                )}
               </Button>
             </div>
           </div>
@@ -678,7 +704,9 @@ export default function GameBoard({
                   </Button>
                   {(!isHost || connectedCount < 2) && (
                     <p className="text-center text-xs text-muted-foreground">
-                      {isHost ? "Need at least 2 players to start." : "Only the host can start the game."}
+                      {isHost
+                        ? "Need at least 2 players to start."
+                        : "Only the host can start the game."}
                     </p>
                   )}
                 </CardContent>
@@ -687,13 +715,17 @@ export default function GameBoard({
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="font-heading text-lg">Game Settings</CardTitle>
-                  <CardDescription>Hosts can tweak settings before the game begins.</CardDescription>
+                  <CardDescription>
+                    Hosts can tweak settings before the game begins.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label>Number of rounds</Label>
-                      <span className="text-xs text-muted-foreground">{appliedSettings.totalRounds}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {appliedSettings.totalRounds}
+                      </span>
                     </div>
                     <Slider
                       min={1}
@@ -759,7 +791,9 @@ export default function GameBoard({
               </div>
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-muted-foreground">Need inspiration? Pick a suggestion.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Need inspiration? Pick a suggestion.
+                  </p>
                   <Button
                     variant="secondary"
                     size="sm"
@@ -832,16 +866,17 @@ export default function GameBoard({
                     <CardTitle className="font-heading">Search YouTube</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <YouTubeSearch onSelect={handleVideoSelect} selectedVideoId={selectedVideo?.id} />
+                    <YouTubeSearch
+                      onSelect={handleVideoSelect}
+                      selectedVideoId={selectedVideo?.id}
+                    />
                   </CardContent>
                 </Card>
 
                 <Card className="self-start">
                   <CardHeader>
                     <CardTitle className="font-heading">Selected Song</CardTitle>
-                    <CardDescription>
-                      Fine-tune the title before locking it in.
-                    </CardDescription>
+                    <CardDescription>Fine-tune the title before locking it in.</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {selectedVideo ? (
@@ -898,7 +933,10 @@ export default function GameBoard({
                                 max={maxStartSeconds}
                                 value={startSeconds}
                                 onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                                  const next = clampStartSeconds(Number(event.target.value), maxStartSeconds);
+                                  const next = clampStartSeconds(
+                                    Number(event.target.value),
+                                    maxStartSeconds,
+                                  );
                                   setStartSeconds(next);
                                   previewPlayerRef.current?.seekTo?.(next, true);
                                 }}
@@ -972,7 +1010,8 @@ export default function GameBoard({
                           Starts at {formatSeconds(mySelection.startSeconds ?? 0)}
                         </div>
                       )}
-                      {mySelection.customTitle && mySelection.originalTitle &&
+                      {mySelection.customTitle &&
+                        mySelection.originalTitle &&
                         mySelection.customTitle.trim() !== mySelection.originalTitle.trim() && (
                           <div className="text-sm text-muted-foreground">
                             Original title: {mySelection.originalTitle}
@@ -1000,7 +1039,8 @@ export default function GameBoard({
       : "Type your guess...";
 
   if (phase === "guessing" && currentSong) {
-    const timerProgress = settings.playbackDuration > 0 ? 1 - (timeRemaining / settings.playbackDuration) : 0;
+    const timerProgress =
+      settings.playbackDuration > 0 ? 1 - timeRemaining / settings.playbackDuration : 0;
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
@@ -1110,13 +1150,13 @@ export default function GameBoard({
                             key={entry.id}
                             className={cn(
                               "flex flex-col gap-2",
-                              isSelf ? "items-end" : "items-start"
+                              isSelf ? "items-end" : "items-start",
                             )}
                           >
                             <div
                               className={cn(
                                 "flex items-start gap-3",
-                                isSelf ? "flex-row-reverse" : "flex-row"
+                                isSelf ? "flex-row-reverse" : "flex-row",
                               )}
                             >
                               <PlayerAvatar
@@ -1124,8 +1164,7 @@ export default function GameBoard({
                                 playerName={entry.playerName}
                                 size="sm"
                               />
-                              <div className={cn("space-y-1", isSelf ? "text-right" : "text-left")}
-                              >
+                              <div className={cn("space-y-1", isSelf ? "text-right" : "text-left")}>
                                 <div className="flex items-center gap-2 text-sm font-medium">
                                   <span>{isSelf ? "You" : entry.playerName}</span>
                                   {entry.isCorrect && <Badge>Correct</Badge>}
@@ -1135,7 +1174,7 @@ export default function GameBoard({
                                     "max-w-xs rounded-md px-3 py-2 text-sm",
                                     isSelf
                                       ? "bg-primary text-primary-foreground"
-                                      : "bg-muted/40 text-muted-foreground"
+                                      : "bg-muted/40 text-muted-foreground",
                                   )}
                                 >
                                   "{entry.guess}"
@@ -1174,9 +1213,7 @@ export default function GameBoard({
                     </Button>
                   </div>
                   {!canSubmitGuess && isCurrentSongOwner && (
-                    <p className="text-sm text-muted-foreground">
-                      You can't guess your own song.
-                    </p>
+                    <p className="text-sm text-muted-foreground">You can't guess your own song.</p>
                   )}
                   {!canSubmitGuess && hasCorrectGuess && (
                     <p className="text-sm text-muted-foreground">
@@ -1185,7 +1222,8 @@ export default function GameBoard({
                   )}
                   {lastMyGuess && !hasCorrectGuess && (
                     <p className="text-xs text-muted-foreground">
-                      Last guess: "{lastMyGuess.guess}" ({Math.max(0, Math.ceil(lastMyGuess.time))}s)
+                      Last guess: "{lastMyGuess.guess}" ({Math.max(0, Math.ceil(lastMyGuess.time))}
+                      s)
                     </p>
                   )}
                 </div>
@@ -1281,12 +1319,13 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
-                      ? "bg-primary/20 border-2 border-primary"
-                      : index === 1
-                        ? "bg-secondary/20 border-2 border-secondary"
-                        : "bg-muted/50"
-                      }`}
+                    className={`flex items-center gap-4 p-6 rounded-lg ${
+                      index === 0
+                        ? "bg-primary/20 border-2 border-primary"
+                        : index === 1
+                          ? "bg-secondary/20 border-2 border-secondary"
+                          : "bg-muted/50"
+                    }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">

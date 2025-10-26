@@ -75,7 +75,6 @@ export interface MusicShowdownMoves {
 
 export const MAX_PLAYERS = 8;
 
-
 export const MusicShowdownGame: Game<MusicShowdownState> = {
   name: "music-showdown",
   minPlayers: 2,
@@ -101,19 +100,19 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
       G.settings = { ...clonedState.settings };
       G.currentRound = clonedState.currentRound
         ? {
-          ...clonedState.currentRound,
-          songSelections: { ...clonedState.currentRound.songSelections },
-          guesses: Object.fromEntries(
-            Object.entries(clonedState.currentRound.guesses).map(([key, value]) => [
-              key,
-              value.map((entry) => ({ ...entry })),
-            ]),
-          ),
-          roundScores: { ...clonedState.currentRound.roundScores },
-          playOrder: [...clonedState.currentRound.playOrder],
-          correctGuessers: { ...clonedState.currentRound.correctGuessers },
-          guessLog: clonedState.currentRound.guessLog.map((entry) => ({ ...entry })),
-        }
+            ...clonedState.currentRound,
+            songSelections: { ...clonedState.currentRound.songSelections },
+            guesses: Object.fromEntries(
+              Object.entries(clonedState.currentRound.guesses).map(([key, value]) => [
+                key,
+                value.map((entry) => ({ ...entry })),
+              ]),
+            ),
+            roundScores: { ...clonedState.currentRound.roundScores },
+            playOrder: [...clonedState.currentRound.playOrder],
+            correctGuessers: { ...clonedState.currentRound.correctGuessers },
+            guessLog: clonedState.currentRound.guessLog.map((entry) => ({ ...entry })),
+          }
         : null;
       G.totalRounds = clonedState.totalRounds;
       G.completedRounds = clonedState.completedRounds;
@@ -369,7 +368,9 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
           const connectedPlayers = Object.values(G.players).filter((player) => player.connected);
           const songOwnerId = G.currentRound.currentPlayerId;
-          const eligiblePlayers = connectedPlayers.filter((player) => player.id !== songOwnerId).length;
+          const eligiblePlayers = connectedPlayers.filter(
+            (player) => player.id !== songOwnerId,
+          ).length;
           const correctCount = Object.values(G.currentRound.correctGuessers).filter(Boolean).length;
 
           if (eligiblePlayers === 0 || (eligiblePlayers > 0 && correctCount >= eligiblePlayers)) {
