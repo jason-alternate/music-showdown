@@ -6,29 +6,10 @@
     <meta http-equiv="refresh" content="0; url=/music-showdown/" />
     <script>
       // SPA fallback for GitHub Pages
-      (function () {
-        var segmentCount = 1; // keep "/music-showdown"
-        var l = window.location;
-        var basePath = l.pathname
-          .split("/")
-          .slice(0, segmentCount + 1)
-          .join("/");
-        var remainingPath = l.pathname
-          .split("/")
-          .slice(segmentCount + 1)
-          .join("/");
-        var redirect =
-          l.protocol +
-          "//" +
-          l.hostname +
-          (l.port ? ":" + l.port : "") +
-          basePath +
-          "/?/" +
-          remainingPath.replace(/&/g, "~and~") +
-          (l.search ? "&" + l.search.slice(1).replace(/&/g, "~and~") : "") +
-          l.hash;
-        window.location.replace(redirect);
-      })();
+      if (sessionStorage) {
+        sessionStorage.redirect = location.pathname + location.search + location.hash;
+      }
+      location.replace("/music-showdown/" + location.search + location.hash);
     </script>
   </head>
   <body>
