@@ -74,7 +74,6 @@ const THEME_SUGGESTIONS = [
   "Modern Country",
   "Reggae Classics",
   "Funk Essentials",
-  "Britpop Favorites",
 ];
 
 const GAME_STATE_STORAGE_PREFIX = "musicshowdown.state";

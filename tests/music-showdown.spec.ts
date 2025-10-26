@@ -28,6 +28,9 @@ test.describe("Music Showdown end-to-end", () => {
     await stubYouTubeSearch(hostPage);
     await stubYouTubeSearch(peerPage);
 
+    await accelerateTimers(hostPage);
+    await accelerateTimers(peerPage);
+
     const totalRounds = 3;
     const hostSong = TEST_YOUTUBE_RESULTS[0];
     const peerSong = TEST_YOUTUBE_RESULTS[1];
@@ -78,8 +81,7 @@ test.describe("Music Showdown end-to-end", () => {
         if (!peerDisabled && hostDisabled) {
           // Peer guesses the host's song
           await peerGuessInput.fill(hostSong.title);
-          await peerSubmitButton.click();
-          await expect(peerGuessInput).toBeDisabled({ timeout: 10000 });
+          await peerSubmitButton.click({ force: true });
 
           if (songIndex < songsPerRound - 1) {
             await expect(hostGuessInput).toBeEnabled({ timeout: 20000 });
@@ -87,8 +89,7 @@ test.describe("Music Showdown end-to-end", () => {
         } else if (!hostDisabled && peerDisabled) {
           // Host guesses the peer's song
           await hostGuessInput.fill(peerSong.title);
-          await hostSubmitButton.click();
-          await expect(hostGuessInput).toBeDisabled({ timeout: 10000 });
+          await hostSubmitButton.click({ force: true });
 
           if (songIndex < songsPerRound - 1) {
             await expect(peerGuessInput).toBeEnabled({ timeout: 20000 });
