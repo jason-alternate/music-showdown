@@ -64,156 +64,141 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-primary via-purple-600 to-blue-600 relative overflow-hidden">
-      {/* Decorative elements */}
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0zNiAxOGMzLjMxNCAwIDYgMi42ODYgNiA2cy0yLjY4NiA2LTYgNi02LTIuNjg2LTYtNiAyLjY4Ni02IDYtNnoiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLW9wYWNpdHk9Ii4xIi8+PC9nPjwvc3ZnPg==')] opacity-20"></div>
-
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-emerald-100 to-emerald-200 text-foreground transition-colors dark:from-emerald-950 dark:via-emerald-900 dark:to-emerald-950">
       <div className="absolute top-4 right-4 z-10">
         <ThemeToggle />
       </div>
 
-      <div className="relative z-10 container mx-auto px-4 py-16">
-        {/* Hero Section */}
-        <div className="text-center mb-16 pt-8">
-          <h1 className="text-6xl md:text-7xl font-heading font-bold text-white mb-4 tracking-tight">
-            Music Showdown
-          </h1>
-          <p className="text-xl md:text-2xl text-white/90 mb-8 font-body">
-            Guess the song, win the game
-          </p>
+      <div className="relative z-10">
+        <div className="container mx-auto px-4 py-16">
+          <header className="mx-auto max-w-3xl text-center">
+            <h1 className="mb-4 text-5xl font-heading font-bold tracking-tight md:text-6xl">
+              Music Showdown
+            </h1>
+            <p className="text-lg text-muted-foreground md:text-xl">
+              Pick a name, create or join a room, and start guessing songs with friends.
+            </p>
+          </header>
 
-          {/* Main Action Card */}
-          <Card className="max-w-md mx-auto bg-white/95 dark:bg-card/95 backdrop-blur-sm border-2">
-            <CardHeader>
-              <CardTitle className="text-2xl font-heading">Join the Music</CardTitle>
-              <CardDescription>Enter your name to get started</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
+          <section className="mx-auto mt-12 max-w-4xl">
+            <Card className="w-full border border-emerald-200/60 bg-background/90 shadow-sm backdrop-blur-sm dark:border-emerald-800/60 dark:bg-card/90">
+              <CardHeader>
+                <CardTitle className="text-2xl font-heading">1. Choose your display name</CardTitle>
+                <CardDescription>Everyone in the room will see you by this name.</CardDescription>
+              </CardHeader>
+              <CardContent>
                 <Input
                   placeholder="Your name"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCreateRoom()}
-                  className="text-lg py-6"
+                  className="text-lg"
                   data-testid="input-player-name"
                 />
-              </div>
+              </CardContent>
+            </Card>
+          </section>
 
-              <Button
-                onClick={handleCreateRoom}
-                size="lg"
-                className="w-full text-lg font-semibold"
-                disabled={!playerName.trim()}
-                data-testid="button-create-room"
-              >
-                Create Room
-              </Button>
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-card px-2 text-muted-foreground">Or</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Room code"
-                  value={roomCode}
-                  onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
-                  className="font-mono uppercase text-lg"
-                  maxLength={6}
-                  data-testid="input-room-code"
-                />
-                <Button
-                  onClick={handleJoinRoom}
-                  variant="secondary"
-                  disabled={!playerName.trim() || !roomCode.trim()}
-                  data-testid="button-join-room"
-                >
-                  Join
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* How to Play */}
-        <div className="max-w-5xl mx-auto mb-16">
-          <h2 className="text-3xl font-heading font-bold text-white text-center mb-8">
-            How to Play
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                icon: Users,
-                title: "1. Create Room",
-                description: "Host creates a room and shares the code with friends",
-              },
-              {
-                icon: Music,
-                title: "2. Pick Songs",
-                description: "Host sets a theme, players search YouTube for matching songs",
-              },
-              {
-                icon: Search,
-                title: "3. Guess Away",
-                description: "Listen to each song and try to guess the title quickly",
-              },
-              {
-                icon: Trophy,
-                title: "4. Win Points",
-                description: "First and fastest correct guesses earn the most points",
-              },
-            ].map((step, i) => (
-              <Card
-                key={i}
-                className="bg-white/90 dark:bg-card/90 backdrop-blur-sm border-2 hover-elevate"
-              >
-                <CardHeader className="text-center">
-                  <div className="mx-auto w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center mb-4">
-                    <step.icon className="w-8 h-8 text-primary" />
-                  </div>
-                  <CardTitle className="text-lg font-heading">{step.title}</CardTitle>
-                  <CardDescription className="text-sm">{step.description}</CardDescription>
-                </CardHeader>
-              </Card>
-            ))}
-          </div>
-        </div>
-
-        {/* Features */}
-        <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                title: "Theme-Based Rounds",
-                description: "Host picks creative themes for endless variety",
-              },
-              {
-                title: "YouTube Integration",
-                description: "Search millions of songs directly in the game",
-              },
-              {
-                title: "Competitive Scoring",
-                description: "Speed and accuracy determine the winner",
-              },
-            ].map((feature, i) => (
-              <Card key={i} className="bg-white/80 dark:bg-card/80 backdrop-blur-sm text-center">
+          <section className="mx-auto mt-10 max-w-4xl">
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card className="border border-emerald-200/60 bg-background/90 shadow-sm backdrop-blur-sm dark:border-emerald-800/60 dark:bg-card/90">
                 <CardHeader>
-                  <CardTitle className="text-lg font-heading">{feature.title}</CardTitle>
-                  <CardDescription>{feature.description}</CardDescription>
+                  <CardTitle className="text-xl font-heading">2A. Host a new room</CardTitle>
+                  <CardDescription>Create a room and share the code with your friends.</CardDescription>
                 </CardHeader>
+                <CardContent>
+                  <Button
+                    onClick={handleCreateRoom}
+                    size="lg"
+                    className="w-full text-lg font-semibold"
+                    disabled={!playerName.trim()}
+                    data-testid="button-create-room"
+                  >
+                    Create Room
+                  </Button>
+                </CardContent>
               </Card>
-            ))}
-          </div>
+
+              <Card className="border border-emerald-200/60 bg-background/90 shadow-sm backdrop-blur-sm dark:border-emerald-800/60 dark:bg-card/90">
+                <CardHeader>
+                  <CardTitle className="text-xl font-heading">2B. Join an existing room</CardTitle>
+                  <CardDescription>Enter the room code shared by the host.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Input
+                    placeholder="Room code"
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                    onKeyDown={(e) => e.key === "Enter" && handleJoinRoom()}
+                    className="font-mono uppercase text-lg"
+                    maxLength={6}
+                    data-testid="input-room-code"
+                  />
+                  <Button
+                    onClick={handleJoinRoom}
+                    variant="secondary"
+                    disabled={!playerName.trim() || !roomCode.trim()}
+                    data-testid="button-join-room"
+                  >
+                    Join Room
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </section>
+
+          {/* How to Play */}
+          <section className="mx-auto mt-16 max-w-5xl">
+            <h2 className="mb-8 text-center text-3xl font-heading font-bold">
+              How to Play
+            </h2>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+              {[
+                {
+                  icon: Users,
+                  title: "1. Create Room",
+                  description: "Host creates a room and shares the code with friends",
+                },
+                {
+                  icon: Music,
+                  title: "2. Pick Songs",
+                  description: "Host sets a theme, players search YouTube for matching songs",
+                },
+                {
+                  icon: Search,
+                  title: "3. Guess Away",
+                  description: "Listen to each song and try to guess the title quickly",
+                },
+                {
+                  icon: Trophy,
+                  title: "4. Win Points",
+                  description: "First and fastest correct guesses earn the most points",
+                },
+              ].map((step, i) => (
+                <Card
+                  key={i}
+                  className="border border-emerald-200/60 bg-background/90 text-center shadow-sm backdrop-blur-sm dark:border-emerald-800/60 dark:bg-card/90"
+                >
+                  <CardHeader className="text-center">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-200/60 dark:bg-emerald-900/40">
+                      <step.icon className="h-8 w-8 text-emerald-700 dark:text-emerald-300" />
+                    </div>
+                    <CardTitle className="text-lg font-heading">{step.title}</CardTitle>
+                    <CardDescription className="text-sm">{step.description}</CardDescription>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          </section>
+
         </div>
       </div>
-      <a href="https://www.flaticon.com/free-icons/music-note" title="music note icons">
+
+      <a
+        className="block px-4 pb-6 text-center text-xs text-muted-foreground/80"
+        href="https://www.flaticon.com/free-icons/music-note"
+        title="music note icons"
+      >
         Music note icons created by Freepik - Flaticon
       </a>
     </div>

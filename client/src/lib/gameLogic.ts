@@ -34,15 +34,6 @@ export function isGuessCorrect(guess: string, answer: string): boolean {
 
   if (cleanGuess === cleanAnswer) return true;
 
-  // Check if guess contains answer or vice versa (for partial matches)
-  if (cleanGuess.includes(cleanAnswer) || cleanAnswer.includes(cleanGuess)) {
-    // Only accept if the length difference is not too large (prevents "a" matching "amazing song")
-    const lengthRatio =
-      Math.min(cleanGuess.length, cleanAnswer.length) /
-      Math.max(cleanGuess.length, cleanAnswer.length);
-    if (lengthRatio > 0.6) return true;
-  }
-
   return false;
 }
 

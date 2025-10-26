@@ -16,6 +16,7 @@ export const songSelectionSchema = z.object({
   originalTitle: z.string(),
   customTitle: z.string(),
   thumbnail: z.string(),
+  startSeconds: z.number().min(0).max(3600).default(0),
 });
 
 export type SongSelection = z.infer<typeof songSelectionSchema>;
@@ -34,7 +35,6 @@ export interface Player {
 
 // Game settings
 export interface GameSettings {
-  pickTimerDuration: number; // in seconds
   playbackDuration: number; // in seconds
   totalRounds: number;
 }
@@ -103,7 +103,6 @@ export interface LobbyPlayerSlot {
 
 // Room settings form
 export const roomSettingsSchema = z.object({
-  pickTimerDuration: z.number().min(30).max(180),
   playbackDuration: z.number().min(15).max(60),
   totalRounds: z.number().min(1).max(10),
 });

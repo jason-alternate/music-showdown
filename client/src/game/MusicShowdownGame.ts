@@ -20,6 +20,35 @@ type CtxWithRandom = {
   };
 };
 
+type EventsAPI = {
+  setPhase?: (phase: GamePhase) => void;
+};
+
+const advanceToNextSongOrRound = (G: MusicShowdownState, events?: EventsAPI) => {
+  const round = G.currentRound;
+  if (!round) return;
+
+  const nextIndex = round.currentSongIndex + 1;
+
+  if (nextIndex < round.playOrder.length) {
+    round.currentSongIndex = nextIndex;
+    const nextPlayerId = round.playOrder[nextIndex];
+    round.currentPlayerId = nextPlayerId ?? null;
+    round.guesses = {};
+    round.correctGuessers = {};
+    G.timer = G.settings.playbackDuration;
+    return;
+  }
+
+  round.currentSongIndex = nextIndex;
+  round.currentPlayerId = null;
+  round.guesses = {};
+  round.correctGuessers = {};
+  G.timer = null;
+  G.phase = "round_results";
+  events?.setPhase?.("round_results");
+};
+
 export interface MusicShowdownMoves {
   // Lobby phase
   updateSettings: (settings: Partial<GameSettings>) => void;
@@ -40,10 +69,12 @@ export interface MusicShowdownMoves {
 
   // Round transitions
   nextRound: () => void;
+  restartLobby: () => void;
   endGame: () => void;
 }
 
 export const MAX_PLAYERS = 8;
+
 
 export const MusicShowdownGame: Game<MusicShowdownState> = {
   name: "music-showdown",
@@ -70,19 +101,19 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
       G.settings = { ...clonedState.settings };
       G.currentRound = clonedState.currentRound
         ? {
-            ...clonedState.currentRound,
-            songSelections: { ...clonedState.currentRound.songSelections },
-            guesses: Object.fromEntries(
-              Object.entries(clonedState.currentRound.guesses).map(([key, value]) => [
-                key,
-                value.map((entry) => ({ ...entry })),
-              ]),
-            ),
-            roundScores: { ...clonedState.currentRound.roundScores },
-            playOrder: [...clonedState.currentRound.playOrder],
-            correctGuessers: { ...clonedState.currentRound.correctGuessers },
-            guessLog: clonedState.currentRound.guessLog.map((entry) => ({ ...entry })),
-          }
+          ...clonedState.currentRound,
+          songSelections: { ...clonedState.currentRound.songSelections },
+          guesses: Object.fromEntries(
+            Object.entries(clonedState.currentRound.guesses).map(([key, value]) => [
+              key,
+              value.map((entry) => ({ ...entry })),
+            ]),
+          ),
+          roundScores: { ...clonedState.currentRound.roundScores },
+          playOrder: [...clonedState.currentRound.playOrder],
+          correctGuessers: { ...clonedState.currentRound.correctGuessers },
+          guessLog: clonedState.currentRound.guessLog.map((entry) => ({ ...entry })),
+        }
         : null;
       G.totalRounds = clonedState.totalRounds;
       G.completedRounds = clonedState.completedRounds;
@@ -100,7 +131,6 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
       phase: "lobby",
       players: {},
       settings: {
-        pickTimerDuration: 60,
         playbackDuration: 30,
         totalRounds: 3,
       },
@@ -199,7 +229,7 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
           const player = G.players[playerID];
           if (!player?.isHost || !G.currentRound?.theme) return;
 
-          G.timer = G.settings.pickTimerDuration;
+          G.timer = null;
           G.phase = "song_picking";
           events?.setPhase?.("song_picking");
         },
@@ -210,35 +240,29 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
     song_picking: {
       moves: {
         selectSong: ({ G, playerID }, selection: SongSelection) => {
-          if (!G.currentRound) return;
+          const round = G.currentRound;
+          if (!round) return;
 
-          G.currentRound.songSelections[playerID] = selection;
-        },
-        tickTimer: ({ G, playerID }) => {
-          const player = G.players[playerID];
-          if (!player?.isHost) return;
-          if (G.timer === null || G.timer <= 0) {
-            if (G.timer !== null) {
-              G.timer = 0;
-            }
+          const conflictingEntry = Object.entries(round.songSelections).find(
+            ([id, song]) => id !== playerID && song.videoId === selection.videoId,
+          );
+
+          if (conflictingEntry) {
             return;
           }
 
-          G.timer -= 1;
+          round.songSelections[playerID] = selection;
         },
       },
 
       endIf: ({ G }) => {
         if (!G.currentRound) return false;
 
-        // Move to guessing when all players have selected or timer runs out
+        // Move to guessing when all connected players have selected
         const connectedPlayers = Object.values(G.players).filter((player) => player.connected);
         const requiredSelections = connectedPlayers.length;
         if (requiredSelections === 0) return false;
-        return (
-          Object.keys(G.currentRound.songSelections).length >= requiredSelections ||
-          (G.timer !== null && G.timer <= 0)
-        );
+        return Object.keys(G.currentRound.songSelections).length >= requiredSelections;
       },
 
       next: "guessing",
@@ -275,7 +299,7 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
     guessing: {
       moves: {
-        submitGuess: ({ G, ctx, playerID }, guess: string) => {
+        submitGuess: ({ G, ctx, playerID, events }, guess: string) => {
           if (!G.currentRound || !G.currentRound.currentPlayerId) return;
 
           // Don't allow the song owner to guess their own song
@@ -342,54 +366,34 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
                 (G.currentRound.roundScores[playerID] || 0) + points;
             }
           }
+
+          const connectedPlayers = Object.values(G.players).filter((player) => player.connected);
+          const songOwnerId = G.currentRound.currentPlayerId;
+          const eligiblePlayers = connectedPlayers.filter((player) => player.id !== songOwnerId).length;
+          const correctCount = Object.values(G.currentRound.correctGuessers).filter(Boolean).length;
+
+          if (eligiblePlayers === 0 || (eligiblePlayers > 0 && correctCount >= eligiblePlayers)) {
+            advanceToNextSongOrRound(G, events);
+          }
         },
-        tickTimer: ({ G, playerID }) => {
+        tickTimer: ({ G, playerID, events }) => {
           const player = G.players[playerID];
           if (!player?.isHost) return;
-          if (G.timer === null || G.timer <= 0) {
-            if (G.timer !== null) {
-              G.timer = 0;
-            }
+          if (G.timer === null) return;
+
+          if (G.timer <= 0) {
+            G.timer = 0;
+            advanceToNextSongOrRound(G, events);
             return;
           }
 
           G.timer -= 1;
+
+          if (G.timer <= 0) {
+            G.timer = 0;
+            advanceToNextSongOrRound(G, events);
+          }
         },
-      },
-
-      endIf: ({ G }) => {
-        const round = G.currentRound;
-        if (!round) return false;
-
-        // All eligible players have guessed (excluding song owner)
-        const connectedPlayers = Object.values(G.players).filter((player) => player.connected);
-        const eligiblePlayers = Math.max(connectedPlayers.length - 1, 0);
-        const correctCount = Object.values(round.correctGuessers).filter(Boolean).length;
-        const timerExpired = G.timer !== null && G.timer <= 0;
-
-        return correctCount >= eligiblePlayers || timerExpired;
-      },
-
-      onEnd: ({ G, events }) => {
-        if (!G.currentRound) return;
-
-        // Move to next song or round results
-        G.currentRound.currentSongIndex++;
-
-        if (G.currentRound.currentSongIndex < G.currentRound.playOrder.length) {
-          // Next song
-          const nextPlayerId = G.currentRound.playOrder[G.currentRound.currentSongIndex];
-          G.currentRound.currentPlayerId = nextPlayerId ?? null;
-          G.currentRound.guesses = {};
-          G.currentRound.correctGuessers = {};
-          G.timer = G.settings.playbackDuration;
-          G.phase = "guessing";
-        } else {
-          // Round complete
-          G.timer = null;
-          G.phase = "round_results";
-          events?.setPhase?.("round_results");
-        }
       },
     },
 
@@ -420,6 +424,21 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
     game_over: {
       moves: {
+        restartLobby: ({ G, playerID, events }) => {
+          const player = G.players[playerID];
+          if (!player?.isHost) return;
+
+          for (const participant of Object.values(G.players)) {
+            participant.score = 0;
+          }
+
+          G.currentRound = null;
+          G.completedRounds = 0;
+          G.timer = null;
+          G.totalRounds = G.settings.totalRounds;
+          G.phase = "lobby";
+          events?.setPhase?.("lobby");
+        },
         endGame: ({ G, events }) => {
           G.phase = "lobby";
           // Could reset to lobby or end game

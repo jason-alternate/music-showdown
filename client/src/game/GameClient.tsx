@@ -3,6 +3,8 @@ import { Client, type BoardProps } from "boardgame.io/react";
 import { P2P } from "@boardgame.io/p2p";
 import type { GameState } from "@/schema";
 import { MusicShowdownGame, MAX_PLAYERS } from "./MusicShowdownGame";
+import { ConnectionScreen } from "@/components/ConnectionScreen";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   getIdentity,
   promoteIdentityToHost,
@@ -124,6 +126,18 @@ export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
         multiplayer: P2P({ isHost: identity.role === "host" }),
         numPlayers: MAX_PLAYERS,
         debug: false,
+        loading: () => (
+          <ConnectionScreen
+            title="Connecting to your room"
+            description="Setting the stage and syncing players. Hang tight—this should only take a moment."
+            roomCode={roomCode}
+            topRightSlot={
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                <ThemeToggle />
+              </div>
+            }
+          />
+        ),
       }),
     [boardWithIdentity, identity.role],
   );

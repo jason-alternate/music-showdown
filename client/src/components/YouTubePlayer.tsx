@@ -2,12 +2,14 @@ import { useEffect, useRef } from "react";
 
 interface YouTubePlayerProps {
   videoId: string;
-  onReady?: () => void;
+  onReady?: (player: any) => void;
   onEnd?: () => void;
   autoplay?: boolean;
   startSeconds?: number;
   endSeconds?: number;
   preventPause?: boolean;
+  timerProgress?: number;
+  interactive?: boolean;
 }
 
 declare global {
@@ -25,6 +27,8 @@ export function YouTubePlayer({
   startSeconds = 0,
   endSeconds,
   preventPause = false,
+  timerProgress,
+  interactive = false,
 }: YouTubePlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
@@ -46,18 +50,19 @@ export function YouTubePlayer({
             autoplay: autoplay ? 1 : 0,
             start: startSeconds,
             end: endSeconds,
-            controls: 0,
-            disablekb: 1,
+            controls: interactive ? 1 : 0,
+            disablekb: interactive ? 0 : 1,
             fs: 0,
             modestbranding: 1,
             rel: 0,
+            iv_load_policy: 3,
           },
           events: {
             onReady: (event: any) => {
               if (autoplay) {
                 event.target.playVideo();
               }
-              onReady?.();
+              onReady?.(event.target);
             },
             onStateChange: (event: any) => {
               if (preventPause && event.data === window.YT.PlayerState.PAUSED) {
@@ -85,16 +90,21 @@ export function YouTubePlayer({
         playerRef.current.destroy();
       }
     };
-  }, [videoId, autoplay, startSeconds, endSeconds, onReady, onEnd, preventPause]);
+  }, [videoId, autoplay, startSeconds, endSeconds, onReady, onEnd, preventPause, interactive]);
 
   return (
     <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden">
       <div
         ref={containerRef}
-        className="pointer-events-none w-full h-full"
+        className={interactive ? "w-full h-full" : "pointer-events-none w-full h-full"}
         data-testid="youtube-player"
       />
-      <div className="pointer-events-none absolute inset-0 rounded-lg bg-linear-to-b from-black/95 via-black/80 to-black/50" />
+      {timerProgress !== undefined && (
+        <div
+          className="pointer-events-none absolute inset-0 rounded-lg"
+          style={{ backgroundColor: `rgba(0,0,0,${1 - 0.75 * timerProgress})` }}
+        />
+      )}
     </div>
   );
 }

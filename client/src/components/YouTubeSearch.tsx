@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Loader2 } from "lucide-react";
+import { Search, Loader2, CheckCircle2 } from "lucide-react";
 import { searchYouTube } from "@/lib/youtube";
 import type { YouTubeVideo } from "@/schema";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface YouTubeSearchProps {
   onSelect: (video: YouTubeVideo) => void;
@@ -55,18 +56,21 @@ export function YouTubeSearch({ onSelect, selectedVideoId }: YouTubeSearchProps)
       </div>
 
       {results.length > 0 && (
-        <ScrollArea className="h-[400px] rounded-lg border p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <ScrollArea className="h-[420px] rounded-lg border p-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             {results.map((video) => (
               <Card
                 key={video.id}
-                className={`cursor-pointer hover-elevate transition-all ${
-                  selectedVideoId === video.id ? "ring-2 ring-primary" : ""
-                }`}
+                className={cn(
+                  "group cursor-pointer border transition-all hover:border-primary/40 hover:shadow-md",
+                  selectedVideoId === video.id
+                    ? "border-primary bg-primary/10 shadow-sm ring-2 ring-primary"
+                    : "border-border"
+                )}
                 onClick={() => onSelect(video)}
                 data-testid={`card-video-${video.id}`}
               >
-                <CardContent className="p-3">
+                <CardContent className="relative space-y-3 p-3">
                   <img
                     src={video.thumbnail}
                     alt={video.title}
@@ -74,6 +78,12 @@ export function YouTubeSearch({ onSelect, selectedVideoId }: YouTubeSearchProps)
                   />
                   <h3 className="font-semibold text-sm line-clamp-2 mb-1">{video.title}</h3>
                   <p className="text-xs text-muted-foreground line-clamp-1">{video.channelTitle}</p>
+                  {selectedVideoId === video.id && (
+                    <div className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-primary/90 px-2 py-1 text-xs font-semibold text-primary-foreground">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Selected
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}

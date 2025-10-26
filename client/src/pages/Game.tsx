@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { Link } from "@tanstack/react-router";
 import type { BoardProps } from "boardgame.io/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,24 +12,15 @@ import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { Timer } from "@/components/Timer";
 import { YouTubeSearch } from "@/components/YouTubeSearch";
 import { YouTubePlayer } from "@/components/YouTubePlayer";
-import {
-  Trophy,
-  CheckCircle,
-  Circle,
-  Music,
-  Copy,
-  Check,
-  Crown,
-  Clock,
-  Home,
-  MessageSquare,
-} from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
+import { Trophy, CheckCircle, Circle, Music, Copy, Check, Crown, MessageSquare, Clock, Loader2, Play, Pause } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { GameState, Player, YouTubeVideo, GuessInfo, GuessLogEntry } from "@/schema";
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
 
 type Settings = GameState["settings"];
 
@@ -39,7 +30,55 @@ function toSliderValue(value: number) {
   return [value];
 }
 
+function computeMaxStartSeconds(durationSeconds: number | null | undefined, playbackDuration: number) {
+  const baseline = durationSeconds && Number.isFinite(durationSeconds) && durationSeconds > 0
+    ? Math.floor(durationSeconds)
+    : DEFAULT_MAX_START_SECONDS;
+  return Math.max(0, baseline - playbackDuration);
+}
+
+function clampStartSeconds(value: number, maxSeconds = DEFAULT_MAX_START_SECONDS) {
+  if (Number.isNaN(value) || value < 0) return 0;
+  return Math.min(Math.floor(value), maxSeconds);
+}
+
+function formatSeconds(value: number) {
+  const seconds = Math.max(0, Math.floor(value));
+  const minutes = Math.floor(seconds / 60);
+  const remaining = seconds % 60;
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+  return `${minutes}:${remaining.toString().padStart(2, "0")}`;
+}
+
+const THEME_SUGGESTIONS = [
+  "1960s",
+  "1970s",
+  "1980s",
+  "1990s",
+  "2000s",
+  "2010s",
+  "2020s",
+  "Game Soundtracks",
+  "Movie Soundtracks",
+  "Alternative Rock",
+  "FIFA Soundtracks",
+  "R&B Grooves",
+  "Classic Hip-Hop",
+  "Indie Favorites",
+  "Top 40 Hits",
+  "Chill Electronic",
+  "Country Classics",
+  "Classic Rock",
+  "Modern Country",
+  "Reggae Classics",
+  "Funk Essentials",
+  "Britpop Favorites",
+];
+
 const GAME_STATE_STORAGE_PREFIX = "musicshowdown.state";
+const DEFAULT_MAX_START_SECONDS = 600;
 
 const getStateStorageKey = (roomCode: string) => `${GAME_STATE_STORAGE_PREFIX}.${roomCode}`;
 
@@ -70,7 +109,6 @@ export default function GameBoard({
   updatePlayerName,
   promoteToHost,
 }: GameBoardProps) {
-  const navigate = useNavigate();
   const { toast } = useToast();
 
   const phase = ctx.phase ?? G.phase;
@@ -83,10 +121,13 @@ export default function GameBoard({
   const [themeDraft, setThemeDraft] = useState(currentRound?.theme ?? "");
   const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null);
   const [customTitle, setCustomTitle] = useState("");
+  const [startSeconds, setStartSeconds] = useState(0);
+  const [previewing, setPreviewing] = useState(false);
+  const previewPlayerRef = useRef<any>(null);
+  const [maxStartSeconds, setMaxStartSeconds] = useState(() => computeMaxStartSeconds(null, settings.playbackDuration));
   const [guess, setGuess] = useState("");
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
   const [copied, setCopied] = useState(false);
-  const [displayTimer, setDisplayTimer] = useState(timeRemaining);
   const persistedStateRef = useRef<string | null>(null);
   const restoreAttemptedRef = useRef(false);
 
@@ -100,20 +141,24 @@ export default function GameBoard({
 
   useEffect(() => {
     setLocalSettings(settings);
+    setMaxStartSeconds((previousMax) => {
+      const recalculated = computeMaxStartSeconds(selectedVideo ? previewPlayerRef.current?.getDuration?.() : null, settings.playbackDuration);
+      const clamped = clampStartSeconds(startSeconds, recalculated);
+      if (clamped !== startSeconds) {
+        setStartSeconds(clamped);
+        previewPlayerRef.current?.seekTo?.(clamped, true);
+      }
+      if (recalculated !== previousMax) {
+        return recalculated;
+      }
+      return previousMax;
+    });
   }, [settings]);
 
   const effectivePlayerId = playerID ?? identity.playerID;
 
-  const handleGoHome = () => {
-    navigate({ to: "/music-showdown" });
-  };
-
   const headerControls = (
     <div className="absolute top-4 right-4 flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={handleGoHome} data-testid="button-home">
-        <Home className="h-4 w-4" />
-        <span className="ml-2">Home</span>
-      </Button>
       <ThemeToggle />
     </div>
   );
@@ -130,6 +175,9 @@ export default function GameBoard({
     const existing = G.players?.[id] as Player | undefined;
     if (!existing || existing.name !== name || !existing.connected) {
       moves.setPlayerName?.(name);
+      setStartSeconds(0);
+      setPreviewing(false);
+      previewPlayerRef.current = null;
     }
   }, [G.players, identity.playerName, moves, phase, effectivePlayerId]);
 
@@ -137,6 +185,10 @@ export default function GameBoard({
     if (phase !== "song_picking") {
       setSelectedVideo(null);
       setCustomTitle("");
+      setStartSeconds(0);
+      setPreviewing(false);
+      previewPlayerRef.current = null;
+      setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
     }
     if (phase !== "guessing") {
       setGuess("");
@@ -181,16 +233,13 @@ export default function GameBoard({
   const lastMyGuess = myGuessEntries[myGuessEntries.length - 1] ?? null;
   const hasCorrectGuess = Boolean(effectivePlayerId && correctGuessers[effectivePlayerId]);
 
-  useEffect(() => {
-    setDisplayTimer(timeRemaining);
-  }, [timeRemaining, phase, currentSongOwnerId]);
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-      currentSongOwnerId &&
-      effectivePlayerId &&
-      currentSongOwnerId !== effectivePlayerId &&
-      !hasCorrectGuess &&
-      (rawTimer === null || rawTimer > 0),
+    currentSongOwnerId &&
+    effectivePlayerId &&
+    currentSongOwnerId !== effectivePlayerId &&
+    !hasCorrectGuess &&
+    (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -256,6 +305,19 @@ export default function GameBoard({
   const connectedCount = connectedPlayers.length;
   const openSlots = Math.max(maxPlayers - connectedCount, 0);
 
+  const handleRandomTheme = () => {
+    if (!isHost) return;
+    const trimmedCurrent = (currentRound?.theme ?? themeDraft).trim();
+    const pool =
+      THEME_SUGGESTIONS.length > 1
+        ? THEME_SUGGESTIONS.filter((option) => option !== trimmedCurrent)
+        : THEME_SUGGESTIONS;
+    const selection = pool[Math.floor(Math.random() * pool.length)] ?? THEME_SUGGESTIONS[0];
+    if (selection) {
+      handleThemeChange(selection);
+    }
+  };
+
   const sortedGuessLog = useMemo(() => {
     return [...guessLog].sort((a, b) => {
       if (a.songIndex !== b.songIndex) return a.songIndex - b.songIndex;
@@ -316,20 +378,89 @@ export default function GameBoard({
   const handleVideoSelect = (video: YouTubeVideo) => {
     setSelectedVideo(video);
     setCustomTitle(video.title);
+    setStartSeconds(0);
+    setPreviewing(false);
+    previewPlayerRef.current?.stopVideo?.();
+    previewPlayerRef.current = null;
+    setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
   };
 
   const handleConfirmSong = () => {
     const trimmed = customTitle.trim();
     if (!selectedVideo || !trimmed) return;
+
+    const conflictingEntry = Object.entries(G.currentRound?.songSelections ?? {}).find(
+      ([playerId, selection]) =>
+        playerId !== effectivePlayerId && selection.videoId === selectedVideo.id,
+    );
+
+    if (conflictingEntry) {
+      const [conflictingPlayerId] = conflictingEntry;
+      const conflictingPlayer = G.players?.[conflictingPlayerId] as Player | undefined;
+      const conflictingPlayerName = conflictingPlayer?.name ?? "Another player";
+
+      toast({
+        title: "Song already taken",
+        description: `${conflictingPlayerName} has already locked this song. Pick a different one.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    previewPlayerRef.current?.stopVideo?.();
     moves.selectSong?.({
       videoId: selectedVideo.id,
       originalTitle: selectedVideo.title,
       customTitle: trimmed,
       thumbnail: selectedVideo.thumbnail,
+      startSeconds,
     });
     toast({ title: "Song selected", description: "Waiting for other players..." });
     setSelectedVideo(null);
     setCustomTitle("");
+    setStartSeconds(0);
+    setPreviewing(false);
+    previewPlayerRef.current = null;
+    setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
+  };
+
+  const togglePreview = () => {
+    const player = previewPlayerRef.current;
+    if (!player) return;
+    const state = player.getPlayerState?.();
+    if (state === window.YT?.PlayerState?.PLAYING) {
+      player.pauseVideo?.();
+      setPreviewing(false);
+    } else {
+      player.seekTo?.(startSeconds, true);
+      player.playVideo?.();
+      setPreviewing(true);
+    }
+  };
+
+  const handlePreviewReady = (player: any) => {
+    previewPlayerRef.current = player;
+    const duration = player.getDuration?.();
+    const computedMax = computeMaxStartSeconds(duration, settings.playbackDuration);
+    setMaxStartSeconds(computedMax);
+    setStartSeconds((prev) => {
+      const clamped = clampStartSeconds(prev, computedMax);
+      if (clamped !== prev) {
+        player.seekTo?.(clamped, true);
+        return clamped;
+      }
+      return prev;
+    });
+    player.seekTo?.(startSeconds, true);
+    if (previewing) {
+      player.playVideo?.();
+    } else {
+      player.pauseVideo?.();
+    }
+  };
+
+  const handlePreviewEnd = () => {
+    setPreviewing(false);
   };
 
   const handleSubmitGuess = () => {
@@ -341,6 +472,14 @@ export default function GameBoard({
 
   const handleNextRound = () => {
     moves.nextRound?.();
+    setThemeDraft("");
+    setSelectedVideo(null);
+    setCustomTitle("");
+    setGuess("");
+  };
+
+  const handleRestartLobby = () => {
+    moves.restartLobby?.();
     setThemeDraft("");
     setSelectedVideo(null);
     setCustomTitle("");
@@ -411,76 +550,47 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
-          <div className="flex flex-col gap-6 mb-8">
-            <div className="flex flex-col gap-2">
-              <h1 className="text-3xl font-heading font-bold">Music Showdown</h1>
-              <p className="text-sm text-muted-foreground">Room: {matchID}</p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="outline" className="uppercase">
-                  {identity.role}
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  You are connected as {identity.playerName}.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <Card className="mb-8 border-2">
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-heading mb-2">Room Code</CardTitle>
-              <div className="flex items-center justify-center gap-4">
-                <code
-                  className="text-5xl font-mono font-bold tracking-wider text-primary"
-                  data-testid="text-room-code"
+        <div className="container mx-auto px-4 py-8 max-w-5xl space-y-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2">
+              <h1 className="text-3xl font-heading font-bold">
+                <Link
+                  to="/music-showdown"
+                  className="inline-flex items-center text-left text-inherit transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  {matchID}
-                </code>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleCopyCode}
-                  data-testid="button-copy-code"
-                >
-                  {copied ? (
-                    <Check className="w-5 h-5 text-secondary" />
-                  ) : (
-                    <Copy className="w-5 h-5" />
-                  )}
-                </Button>
-              </div>
-              <CardDescription>Share this code with friends to join</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="player-name">Display name</Label>
-                <Input
-                  id="player-name"
-                  placeholder="Your name"
-                  value={playerNameInput}
-                  onChange={(event) => setPlayerNameInput(event.target.value)}
-                  onBlur={handlePlayerNameCommit}
-                  onKeyDown={(event) => event.key === "Enter" && handlePlayerNameCommit()}
-                  data-testid="input-player-name"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Shared with other players in the lobby.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>Role</Label>
+                  Music Showdown
+                </Link>
+              </h1>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <Badge variant="secondary" className="uppercase">
                   {identity.role}
                 </Badge>
+                <span>Signed in as {identity.playerName}</span>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3">
+              <div className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
+                Room
+              </div>
+              <code
+                className="text-2xl font-mono font-semibold tracking-wider text-primary"
+                data-testid="text-room-code"
+              >
+                {matchID}
+              </code>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCopyCode}
+                data-testid="button-copy-code"
+              >
+                {copied ? <Check className="h-5 w-5 text-secondary" /> : <Copy className="h-5 w-5" />}
+              </Button>
+            </div>
+          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card>
+          <div className="grid gap-6 lg:grid-cols-[2fr_1.1fr]">
+            <Card className="h-full">
               <CardHeader>
                 <CardTitle className="font-heading">
                   Players ({connectedCount}/{maxPlayers})
@@ -492,7 +602,7 @@ export default function GameBoard({
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {lobbySlots.map((slot, index) => (
                     <div
                       key={slot ? slot.id : `empty-${index}`}
@@ -532,15 +642,60 @@ export default function GameBoard({
                 </div>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="font-heading">Game Settings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg">Your Lobby Controls</CardTitle>
+                  <CardDescription>
+                    {isHost
+                      ? "Update your name and start the game once everyone is ready."
+                      : "Update your name while the host prepares the game."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Number of rounds</Label>
+                    <Label htmlFor="player-name">Display name</Label>
+                    <Input
+                      id="player-name"
+                      placeholder="Your name"
+                      value={playerNameInput}
+                      onChange={(event) => setPlayerNameInput(event.target.value)}
+                      onBlur={handlePlayerNameCommit}
+                      onKeyDown={(event) => event.key === "Enter" && handlePlayerNameCommit()}
+                      data-testid="input-player-name"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Shared with other players in the lobby.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleStartGame}
+                    className="w-full"
+                    size="lg"
+                    data-testid="button-start-game"
+                    disabled={!isHost || connectedCount < 2}
+                  >
+                    Start Game
+                  </Button>
+                  {(!isHost || connectedCount < 2) && (
+                    <p className="text-center text-xs text-muted-foreground">
+                      {isHost ? "Need at least 2 players to start." : "Only the host can start the game."}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="font-heading text-lg">Game Settings</CardTitle>
+                  <CardDescription>Hosts can tweak settings before the game begins.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Number of rounds</Label>
+                      <span className="text-xs text-muted-foreground">{appliedSettings.totalRounds}</span>
+                    </div>
                     <Slider
                       min={1}
                       max={10}
@@ -552,43 +707,27 @@ export default function GameBoard({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Pick timer duration (seconds)</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="playback-duration">Playback duration</Label>
+                      <span className="text-xs text-muted-foreground">
+                        {appliedSettings.playbackDuration}s
+                      </span>
+                    </div>
                     <Slider
+                      id="playback-duration"
                       min={30}
                       max={300}
-                      step={30}
-                      value={toSliderValue(appliedSettings.pickTimerDuration)}
-                      onValueChange={sliderPreviewHandler("pickTimerDuration")}
-                      onValueCommit={sliderCommitHandler("pickTimerDuration")}
-                      disabled={!isHost}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Playback duration (seconds)</Label>
-                    <Slider
-                      min={30}
-                      max={300}
-                      step={30}
+                      step={5}
                       value={toSliderValue(appliedSettings.playbackDuration)}
                       onValueChange={sliderPreviewHandler("playbackDuration")}
                       onValueCommit={sliderCommitHandler("playbackDuration")}
                       disabled={!isHost}
                     />
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-
-          <Button
-            onClick={handleStartGame}
-            className="w-full"
-            size="lg"
-            data-testid="button-start-game"
-            disabled={!isHost || connectedCount < 2}
-          >
-            Start Game
-          </Button>
         </div>
       </div>
     );
@@ -619,6 +758,35 @@ export default function GameBoard({
                   disabled={!isHost}
                 />
               </div>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">Need inspiration? Pick a suggestion.</p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRandomTheme}
+                    disabled={!isHost}
+                    data-testid="button-random-theme"
+                  >
+                    Surprise Me
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {THEME_SUGGESTIONS.map((suggestion) => (
+                    <Button
+                      key={suggestion}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleThemeChange(suggestion)}
+                      disabled={!isHost}
+                      className="whitespace-nowrap"
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
+              </div>
               {isHost ? (
                 <Button
                   onClick={() => moves.confirmTheme?.()}
@@ -648,71 +816,133 @@ export default function GameBoard({
           <div className="space-y-6">
             <Card className="bg-primary/10 border-primary">
               <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="font-heading text-2xl mb-1">Pick Your Song</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Theme:{" "}
-                      <span className="font-semibold text-foreground">
-                        {currentRound?.theme ?? "Pending"}
-                      </span>
-                    </p>
-                  </div>
-                  <Timer timeRemaining={timeRemaining} totalTime={settings.pickTimerDuration} />
-                </div>
+                <CardTitle className="font-heading text-2xl mb-1">Pick Your Song</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Theme:{" "}
+                  <span className="font-semibold text-foreground">
+                    {currentRound?.theme ?? "Pending"}
+                  </span>
+                </p>
               </CardHeader>
             </Card>
 
             {!mySelection && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">Search YouTube</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <YouTubeSearch onSelect={handleVideoSelect} selectedVideoId={selectedVideo?.id} />
-                </CardContent>
-              </Card>
-            )}
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                <Card className="lg:col-span-1">
+                  <CardHeader>
+                    <CardTitle className="font-heading">Search YouTube</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <YouTubeSearch onSelect={handleVideoSelect} selectedVideoId={selectedVideo?.id} />
+                  </CardContent>
+                </Card>
 
-            {selectedVideo && !mySelection && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">Your Selection</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <img
-                      src={selectedVideo.thumbnail}
-                      alt={selectedVideo.title}
-                      className="w-full aspect-video object-cover rounded-lg"
-                    />
-                    <div className="space-y-3">
-                      <div>
-                        <Label htmlFor="song-title">Song title to guess</Label>
-                        <Input
-                          id="song-title"
-                          value={customTitle}
-                          onChange={(event) => setCustomTitle(event.target.value)}
-                          className="mt-2"
-                          placeholder="Edit the title if needed..."
-                          data-testid="input-song-title"
-                        />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          This is what other players will try to guess
-                        </p>
+                <Card className="self-start">
+                  <CardHeader>
+                    <CardTitle className="font-heading">Selected Song</CardTitle>
+                    <CardDescription>
+                      Fine-tune the title before locking it in.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {selectedVideo ? (
+                      <div className="space-y-4">
+                        <div className="overflow-hidden rounded-lg border">
+                          <YouTubePlayer
+                            videoId={selectedVideo.id}
+                            autoplay={false}
+                            startSeconds={startSeconds}
+                            interactive
+                            onReady={handlePreviewReady}
+                            onEnd={handlePreviewEnd}
+                          />
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <Label htmlFor="song-title">Song title to guess</Label>
+                            <Input
+                              id="song-title"
+                              value={customTitle}
+                              onChange={(event) => setCustomTitle(event.target.value)}
+                              className="mt-2"
+                              placeholder="Edit the title if needed..."
+                              data-testid="input-song-title"
+                            />
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              This is what other players will try to guess.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="start-seconds">Start playback at</Label>
+                              <span className="text-xs text-muted-foreground">
+                                {formatSeconds(startSeconds)}
+                              </span>
+                            </div>
+                            <Slider
+                              id="start-seconds"
+                              min={0}
+                              max={maxStartSeconds}
+                              step={1}
+                              value={toSliderValue(startSeconds)}
+                              onValueChange={(values) => {
+                                const value = clampStartSeconds(values[0] ?? 0, maxStartSeconds);
+                                setStartSeconds(value);
+                                previewPlayerRef.current?.seekTo?.(value, true);
+                              }}
+                              data-testid="slider-start-seconds"
+                            />
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={0}
+                                max={maxStartSeconds}
+                                value={startSeconds}
+                                onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                                  const next = clampStartSeconds(Number(event.target.value), maxStartSeconds);
+                                  setStartSeconds(next);
+                                  previewPlayerRef.current?.seekTo?.(next, true);
+                                }}
+                                className="w-24"
+                                data-testid="input-start-seconds"
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={togglePreview}
+                                disabled={!previewPlayerRef.current}
+                                data-testid="button-preview"
+                              >
+                                {previewing ? (
+                                  <>
+                                    <Pause className="mr-2 h-4 w-4" /> Pause Preview
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="mr-2 h-4 w-4" /> Play Preview
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <Button
+                            onClick={handleConfirmSong}
+                            className="w-full"
+                            disabled={!customTitle.trim()}
+                            data-testid="button-confirm-song"
+                          >
+                            Confirm Selection
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        onClick={handleConfirmSong}
-                        className="w-full"
-                        disabled={!customTitle.trim()}
-                        data-testid="button-confirm-song"
-                      >
-                        Confirm Selection
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                    ) : (
+                      <div className="flex min-h-[220px] items-center justify-center text-center text-sm text-muted-foreground">
+                        Choose a song from the search results to review its details here.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {mySelection && (
@@ -720,7 +950,37 @@ export default function GameBoard({
                 <CardHeader>
                   <CardTitle className="font-heading">You are all set!</CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    {mySelection.thumbnail ? (
+                      <div className="relative w-full max-w-[200px] overflow-hidden rounded-lg border bg-muted sm:w-48">
+                        <img
+                          src={mySelection.thumbnail}
+                          alt={mySelection.customTitle || mySelection.originalTitle}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ) : null}
+                    <div className="space-y-1">
+                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Selected song
+                      </span>
+                      <div className="text-lg font-semibold leading-snug">
+                        {mySelection.customTitle || mySelection.originalTitle}
+                      </div>
+                      {(mySelection.startSeconds ?? 0) > 0 && (
+                        <div className="text-sm text-muted-foreground">
+                          Starts at {formatSeconds(mySelection.startSeconds ?? 0)}
+                        </div>
+                      )}
+                      {mySelection.customTitle && mySelection.originalTitle &&
+                        mySelection.customTitle.trim() !== mySelection.originalTitle.trim() && (
+                          <div className="text-sm text-muted-foreground">
+                            Original title: {mySelection.originalTitle}
+                          </div>
+                        )}
+                    </div>
+                  </div>
                   <p className="text-sm text-muted-foreground" data-testid="text-waiting-selection">
                     Waiting for other players to finish picking.
                   </p>
@@ -741,10 +1001,11 @@ export default function GameBoard({
       : "Type your guess...";
 
   if (phase === "guessing" && currentSong) {
+    const timerProgress = settings.playbackDuration > 0 ? 1 - (timeRemaining / settings.playbackDuration) : 0;
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+        <div className="container mx-auto px-4 py-8 max-w-5xl space-y-6">
           <Card className="bg-accent/10 border-accent">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -765,120 +1026,173 @@ export default function GameBoard({
             </CardHeader>
           </Card>
 
-          <Card>
-            <CardContent className="pt-6">
-              <YouTubePlayer videoId={currentSong.videoId} autoplay preventPause />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading">Your Guess</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder={guessPlaceholder}
-                  value={guess}
-                  onChange={(event) => setGuess(event.target.value)}
-                  onKeyDown={(event) => event.key === "Enter" && handleSubmitGuess()}
-                  className="text-lg"
-                  data-testid="input-guess"
-                  disabled={!canSubmitGuess}
-                />
-                <Button
-                  onClick={handleSubmitGuess}
-                  disabled={!canSubmitGuess || !guess.trim()}
-                  data-testid="button-submit-guess"
-                >
-                  Submit
-                </Button>
-              </div>
-              {!canSubmitGuess && isCurrentSongOwner && (
-                <p className="text-sm text-muted-foreground">You can't guess your own song.</p>
-              )}
-              {!canSubmitGuess && hasCorrectGuess && (
-                <p className="text-sm text-muted-foreground">
-                  Great job! You'll rejoin next round.
-                </p>
-              )}
-              {lastMyGuess && !hasCorrectGuess && (
-                <p className="text-xs text-muted-foreground">
-                  Last guess: "{lastMyGuess.guess}" ({Math.max(0, Math.ceil(lastMyGuess.time))}s)
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading text-lg">Player Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {players.map((player) => {
-                  const guessList = guesses[player.id] ?? [];
-                  const hasGuessed = guessList.length > 0;
-                  const isOwner = player.id === currentSongOwnerId;
-                  const isCorrect = Boolean(correctGuessers[player.id]);
-                  const lastGuess = guessList[guessList.length - 1];
-                  return (
-                    <div
-                      key={player.id}
-                      className="flex flex-col items-center gap-2 p-3 rounded-lg bg-muted/50"
-                      data-testid={`player-status-${player.id}`}
-                    >
-                      <PlayerAvatar playerId={player.id} playerName={player.name} size="sm" />
-                      <div className="text-xs font-medium text-center">{player.name}</div>
-                      {isOwner ? (
-                        <Music className="w-4 h-4 text-primary" />
-                      ) : isCorrect ? (
-                        <CheckCircle className="w-4 h-4 text-secondary" />
-                      ) : hasGuessed ? (
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <Circle className="w-4 h-4 text-muted-foreground" />
-                      )}
-                      {!isOwner && (
-                        <div className="text-[10px] text-muted-foreground text-center">
-                          {isCorrect ? "Correct" : hasGuessed ? "Guessing" : "Waiting"}
-                          {lastGuess && !isCorrect ? ` (${lastGuess.guess})` : ""}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-heading text-lg flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" /> Guess Log
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {currentSongGuessLog.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No guesses yet for this song.</p>
-              ) : (
-                currentSongGuessLog.map((entry) => (
-                  <div key={entry.id} className="space-y-1">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium">
-                        {entry.playerName}
-                        {entry.isCorrect && <Badge className="ml-2">Correct</Badge>}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {formatGuessTime(entry.time)}
-                      </span>
-                    </div>
-                    <div className="text-sm text-muted-foreground">"{entry.guess}"</div>
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.6fr)_minmax(0,1fr)]">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader className="pb-0">
+                  <CardTitle className="font-heading text-lg">Now Playing</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-4">
+                  <div className="rounded-lg border bg-muted/30 p-2">
+                    <YouTubePlayer
+                      videoId={currentSong.videoId}
+                      autoplay
+                      preventPause
+                      startSeconds={currentSong.startSeconds ?? 0}
+                      timerProgress={timerProgress}
+                    />
                   </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg">Player Status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+                    {players.map((player) => {
+                      const guessList = guesses[player.id] ?? [];
+                      const hasGuessed = guessList.length > 0;
+                      const isOwner = player.id === currentSongOwnerId;
+                      const isCorrect = Boolean(correctGuessers[player.id]);
+                      const lastGuess = guessList[guessList.length - 1];
+                      return (
+                        <div
+                          key={player.id}
+                          className="flex flex-col items-center gap-2 rounded-lg bg-muted/50 p-3"
+                          data-testid={`player-status-${player.id}`}
+                        >
+                          <PlayerAvatar playerId={player.id} playerName={player.name} size="sm" />
+                          <div className="text-xs font-medium text-center">{player.name}</div>
+                          {isOwner ? (
+                            <Music className="h-4 w-4 text-primary" />
+                          ) : isCorrect ? (
+                            <CheckCircle className="h-4 w-4 text-secondary" />
+                          ) : hasGuessed ? (
+                            <Clock className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {!isOwner && (
+                            <div className="text-center text-[10px] text-muted-foreground">
+                              {isCorrect ? "Correct" : hasGuessed ? "Guessing" : "Waiting"}
+                              {lastGuess && !isCorrect ? ` (${lastGuess.guess})` : ""}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="flex min-h-[520px] flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-heading text-lg">
+                  <MessageSquare className="h-4 w-4" /> Guess Log
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden px-0 pb-0">
+                {currentSongGuessLog.length === 0 ? (
+                  <div className="flex h-full items-center justify-center px-6 py-12">
+                    <p className="text-center text-sm text-muted-foreground">
+                      No guesses yet for this song.
+                    </p>
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[360px] px-6 pb-6">
+                    <div className="space-y-4">
+                      {currentSongGuessLog.map((entry) => {
+                        const isSelf = effectivePlayerId && entry.playerId === effectivePlayerId;
+                        return (
+                          <div
+                            key={entry.id}
+                            className={cn(
+                              "flex flex-col gap-2",
+                              isSelf ? "items-end" : "items-start"
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                "flex items-start gap-3",
+                                isSelf ? "flex-row-reverse" : "flex-row"
+                              )}
+                            >
+                              <PlayerAvatar
+                                playerId={entry.playerId}
+                                playerName={entry.playerName}
+                                size="sm"
+                              />
+                              <div className={cn("space-y-1", isSelf ? "text-right" : "text-left")}
+                              >
+                                <div className="flex items-center gap-2 text-sm font-medium">
+                                  <span>{isSelf ? "You" : entry.playerName}</span>
+                                  {entry.isCorrect && <Badge>Correct</Badge>}
+                                </div>
+                                <div
+                                  className={cn(
+                                    "max-w-xs rounded-md px-3 py-2 text-sm",
+                                    isSelf
+                                      ? "bg-primary text-primary-foreground"
+                                      : "bg-muted/40 text-muted-foreground"
+                                  )}
+                                >
+                                  "{entry.guess}"
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatGuessTime(entry.time)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+              <div className="border-t bg-muted/20 p-6">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Input
+                      placeholder={guessPlaceholder}
+                      value={guess}
+                      onChange={(event) => setGuess(event.target.value)}
+                      onKeyDown={(event) => event.key === "Enter" && handleSubmitGuess()}
+                      className="text-lg"
+                      data-testid="input-guess"
+                      disabled={!canSubmitGuess}
+                    />
+                    <Button
+                      onClick={handleSubmitGuess}
+                      disabled={!canSubmitGuess || !guess.trim()}
+                      data-testid="button-submit-guess"
+                      className="sm:w-auto"
+                    >
+                      Submit
+                    </Button>
+                  </div>
+                  {!canSubmitGuess && isCurrentSongOwner && (
+                    <p className="text-sm text-muted-foreground">
+                      You can't guess your own song.
+                    </p>
+                  )}
+                  {!canSubmitGuess && hasCorrectGuess && (
+                    <p className="text-sm text-muted-foreground">
+                      Great job! You'll rejoin next round.
+                    </p>
+                  )}
+                  {lastMyGuess && !hasCorrectGuess && (
+                    <p className="text-xs text-muted-foreground">
+                      Last guess: "{lastMyGuess.guess}" ({Math.max(0, Math.ceil(lastMyGuess.time))}s)
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </div>
         </div>
       </div>
     );
@@ -968,13 +1282,12 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${
-                      index === 0
-                        ? "bg-primary/20 border-2 border-primary"
-                        : index === 1
-                          ? "bg-secondary/20 border-2 border-secondary"
-                          : "bg-muted/50"
-                    }`}
+                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
+                      ? "bg-primary/20 border-2 border-primary"
+                      : index === 1
+                        ? "bg-secondary/20 border-2 border-secondary"
+                        : "bg-muted/50"
+                      }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">
@@ -1000,7 +1313,7 @@ export default function GameBoard({
                   variant="outline"
                   className="flex-1"
                   data-testid="button-new-game"
-                  onClick={handleNextRound}
+                  onClick={handleRestartLobby}
                   disabled={!isHost}
                 >
                   Restart Lobby
@@ -1022,9 +1335,30 @@ export default function GameBoard({
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <ThemeToggle />
-      <p className="text-muted-foreground">Loading...</p>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-primary/10 via-background to-secondary/10">
+      {headerControls}
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_theme(colors.primary/15),transparent_60%)]" />
+      <div className="relative flex min-h-screen flex-col items-center justify-center px-6 py-16">
+        <div className="w-full max-w-md space-y-6 rounded-3xl border border-border/50 bg-background/90 p-10 text-center shadow-xl backdrop-blur">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-heading">Connecting to your room</h2>
+            <p className="text-sm text-muted-foreground">
+              Setting the stage and syncing players. Hang tight—this should only take a moment.
+            </p>
+          </div>
+          {matchID ? (
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/40 px-4 py-2 font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                Room
+                <span className="text-foreground">{matchID}</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </div>
   );
 }
