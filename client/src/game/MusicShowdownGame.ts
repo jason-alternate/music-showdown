@@ -24,26 +24,44 @@ type EventsAPI = {
   setPhase?: (phase: GamePhase) => void;
 };
 
-const advanceToNextSongOrRound = (G: MusicShowdownState, events?: EventsAPI) => {
+const beginSongReveal = (G: MusicShowdownState, events?: EventsAPI) => {
+  const round = G.currentRound;
+  if (!round || round.currentPlayerId === null) return;
+  if (G.phase !== "guessing") return;
+
+  round.revealSongOwnerId = round.currentPlayerId;
+  round.revealSongIndex = round.currentSongIndex;
+  G.timer = null;
+  G.phase = "song_reveal";
+  events?.setPhase?.("song_reveal");
+};
+
+const proceedToNextSongOrRound = (G: MusicShowdownState, events?: EventsAPI) => {
   const round = G.currentRound;
   if (!round) return;
 
-  const nextIndex = round.currentSongIndex + 1;
+  const totalSongs = round.playOrder.length;
+  const currentIndex = round.revealSongIndex ?? round.currentSongIndex ?? 0;
+  const nextIndex = currentIndex + 1;
 
-  if (nextIndex < round.playOrder.length) {
-    round.currentSongIndex = nextIndex;
-    const nextPlayerId = round.playOrder[nextIndex];
-    round.currentPlayerId = nextPlayerId ?? null;
-    round.guesses = {};
-    round.correctGuessers = {};
-    G.timer = G.settings.playbackDuration;
-    return;
-  }
-
-  round.currentSongIndex = nextIndex;
-  round.currentPlayerId = null;
   round.guesses = {};
   round.correctGuessers = {};
+  round.revealSongOwnerId = null;
+  round.revealSongIndex = null;
+  round.currentSongIndex = nextIndex;
+
+  if (nextIndex < totalSongs) {
+    const nextPlayerId = round.playOrder[nextIndex] ?? null;
+    round.currentPlayerId = nextPlayerId ?? null;
+    if (round.currentPlayerId) {
+      G.timer = G.settings.playbackDuration;
+      G.phase = "guessing";
+      events?.setPhase?.("guessing");
+      return;
+    }
+  }
+
+  round.currentPlayerId = null;
   G.timer = null;
   G.phase = "round_results";
   events?.setPhase?.("round_results");
@@ -54,7 +72,6 @@ export interface MusicShowdownMoves {
   updateSettings: (settings: Partial<GameSettings>) => void;
   startGame: () => void;
   setPlayerName: (name: string) => void;
-  restoreState: (state: GameState) => void;
 
   // Theme selection phase
   setTheme: (theme: string) => void;
@@ -79,52 +96,7 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
   name: "music-showdown",
   minPlayers: 2,
   maxPlayers: MAX_PLAYERS,
-
-  moves: {
-    restoreState: ({ G, playerID, events }, state: GameState) => {
-      if (playerID !== "0") return;
-      let clonedState: GameState;
-      try {
-        clonedState = JSON.parse(JSON.stringify(state)) as GameState;
-      } catch {
-        return;
-      }
-
-      if (clonedState.players[playerID]) {
-        clonedState.players[playerID].connected = true;
-        clonedState.players[playerID].isHost = true;
-      }
-
-      G.phase = clonedState.phase;
-      G.players = { ...clonedState.players };
-      G.settings = { ...clonedState.settings };
-      G.currentRound = clonedState.currentRound
-        ? {
-            ...clonedState.currentRound,
-            songSelections: { ...clonedState.currentRound.songSelections },
-            guesses: Object.fromEntries(
-              Object.entries(clonedState.currentRound.guesses).map(([key, value]) => [
-                key,
-                value.map((entry) => ({ ...entry })),
-              ]),
-            ),
-            roundScores: { ...clonedState.currentRound.roundScores },
-            playOrder: [...clonedState.currentRound.playOrder],
-            correctGuessers: { ...clonedState.currentRound.correctGuessers },
-            guessLog: clonedState.currentRound.guessLog.map((entry) => ({ ...entry })),
-          }
-        : null;
-      G.totalRounds = clonedState.totalRounds;
-      G.completedRounds = clonedState.completedRounds;
-      G.timer = clonedState.timer;
-      G.maxPlayers = clonedState.maxPlayers;
-      G.lobbyOrder = [...clonedState.lobbyOrder];
-
-      events?.setPhase?.(clonedState.phase);
-    },
-  },
-
-  setup: ({ ctx }): MusicShowdownState => {
+  setup: (): MusicShowdownState => {
     // Initialize players
     return {
       phase: "lobby",

@@ -93,26 +93,7 @@ const THEME_SUGGESTIONS = [
   "Funk Essentials",
 ];
 
-const GAME_STATE_STORAGE_PREFIX = "musicshowdown.state";
 const DEFAULT_MAX_START_SECONDS = 600;
-
-const getStateStorageKey = (roomCode: string) => `${GAME_STATE_STORAGE_PREFIX}.${roomCode}`;
-
-const readPersistedState = (roomCode: string): GameState | null => {
-  if (typeof window === "undefined") return null;
-  const stored = localStorage.getItem(getStateStorageKey(roomCode));
-  if (!stored) return null;
-  try {
-    return JSON.parse(stored) as GameState;
-  } catch {
-    return null;
-  }
-};
-
-const writePersistedState = (roomCode: string, state: GameState) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(getStateStorageKey(roomCode), JSON.stringify(state));
-};
 
 export default function GameBoard({
   G,
@@ -147,8 +128,6 @@ export default function GameBoard({
   const [guess, setGuess] = useState("");
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
   const [copied, setCopied] = useState(false);
-  const persistedStateRef = useRef<string | null>(null);
-  const restoreAttemptedRef = useRef(false);
 
   useEffect(() => {
     setPlayerNameInput(identity.playerName);
@@ -216,26 +195,6 @@ export default function GameBoard({
       setGuess("");
     }
   }, [phase]);
-
-  useEffect(() => {
-    if (!isHost) return;
-    if (!isActive) return;
-    if (restoreAttemptedRef.current) return;
-    const stored = readPersistedState(matchID);
-    restoreAttemptedRef.current = true;
-    if (!stored) return;
-    moves.restoreState?.(stored);
-  }, [isActive, isHost, matchID, moves]);
-
-  useEffect(() => {
-    if (!isHost) return;
-    if (!restoreAttemptedRef.current) return;
-    if (!G.players || Object.keys(G.players).length === 0) return;
-    const snapshot = JSON.stringify(G);
-    if (persistedStateRef.current === snapshot) return;
-    persistedStateRef.current = snapshot;
-    writePersistedState(matchID, G);
-  }, [G, isHost, matchID]);
 
   const players = Object.values(G.players ?? {})
     .map((player) => player as Player)
@@ -1322,10 +1281,10 @@ export default function GameBoard({
                   <div
                     key={player.id}
                     className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
-                        ? "bg-primary/20 border-2 border-primary"
-                        : index === 1
-                          ? "bg-secondary/20 border-2 border-secondary"
-                          : "bg-muted/50"
+                      ? "bg-primary/20 border-2 border-primary"
+                      : index === 1
+                        ? "bg-secondary/20 border-2 border-secondary"
+                        : "bg-muted/50"
                       }`}
                     data-testid={`final-player-${player.id}`}
                   >
