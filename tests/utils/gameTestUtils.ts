@@ -50,7 +50,7 @@ export async function createHostAndPeerMatch(
   await peerPage.getByTestId("button-join-room").click();
   await peerPage.waitForURL(`**/game/${roomCode}`, { timeout: 20000 });
 
-  await expect(hostPage.getByText(/Players \(2\/\d+/)).toBeVisible({ timeout: 20000 });
+  await expect(hostPage.getByText(new RegExp(`Players \\(2/\\d+\\)`))).toBeVisible({ timeout: 20000 });
 
   return {
     hostContext,

@@ -33,7 +33,7 @@ import type { GameState, Player, YouTubeVideo, GuessInfo, GuessLogEntry } from "
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
 
 type Settings = GameState["settings"];
 
@@ -122,6 +122,7 @@ export default function GameBoard({
   matchID,
   identity,
   isHost,
+  isActive,
   updatePlayerName,
   promoteToHost,
 }: GameBoardProps) {
@@ -218,12 +219,13 @@ export default function GameBoard({
 
   useEffect(() => {
     if (!isHost) return;
+    if (!isActive) return;
     if (restoreAttemptedRef.current) return;
-    restoreAttemptedRef.current = true;
     const stored = readPersistedState(matchID);
+    restoreAttemptedRef.current = true;
     if (!stored) return;
     moves.restoreState?.(stored);
-  }, [isHost, matchID, moves]);
+  }, [isActive, isHost, matchID, moves]);
 
   useEffect(() => {
     if (!isHost) return;
@@ -256,11 +258,11 @@ export default function GameBoard({
 
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-      currentSongOwnerId &&
-      effectivePlayerId &&
-      currentSongOwnerId !== effectivePlayerId &&
-      !hasCorrectGuess &&
-      (rawTimer === null || rawTimer > 0),
+    currentSongOwnerId &&
+    effectivePlayerId &&
+    currentSongOwnerId !== effectivePlayerId &&
+    !hasCorrectGuess &&
+    (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -1319,13 +1321,12 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${
-                      index === 0
+                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
                         ? "bg-primary/20 border-2 border-primary"
                         : index === 1
                           ? "bg-secondary/20 border-2 border-secondary"
                           : "bg-muted/50"
-                    }`}
+                      }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">

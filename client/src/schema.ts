@@ -44,6 +44,7 @@ export type GamePhase =
   | "lobby"
   | "theme_selection"
   | "song_picking"
+  | "song_reveal"
   | "guessing"
   | "round_results"
   | "game_over";
@@ -79,6 +80,8 @@ export interface RoundState {
   playOrder: string[];
   correctGuessers: Record<string, boolean>;
   guessLog: GuessLogEntry[];
+  revealSongOwnerId: string | null;
+  revealSongIndex: number | null;
 }
 
 // Main game state (serializable)
