@@ -84,6 +84,9 @@ export interface MusicShowdownMoves {
   submitGuess: (guess: string) => void;
   tickTimer: () => void;
 
+  // Song reveal phase
+  continueReveal: () => void;
+
   // Round transitions
   nextRound: () => void;
   restartLobby: () => void;
@@ -190,6 +193,8 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
               playOrder: [],
               correctGuessers: {},
               guessLog: [],
+              revealSongOwnerId: null,
+              revealSongIndex: null,
             };
           } else {
             G.currentRound.theme = theme;
@@ -252,6 +257,8 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
         G.currentRound.currentSongIndex = 0;
         G.currentRound.guesses = {};
         G.currentRound.correctGuessers = {};
+        G.currentRound.revealSongOwnerId = null;
+        G.currentRound.revealSongIndex = null;
 
         if (shuffledOrder.length === 0) {
           G.currentRound.currentPlayerId = null;
@@ -346,7 +353,8 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
           const correctCount = Object.values(G.currentRound.correctGuessers).filter(Boolean).length;
 
           if (eligiblePlayers === 0 || (eligiblePlayers > 0 && correctCount >= eligiblePlayers)) {
-            advanceToNextSongOrRound(G, events);
+            beginSongReveal(G, events);
+            return;
           }
         },
         tickTimer: ({ G, playerID, events }) => {
@@ -356,7 +364,7 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
           if (G.timer <= 0) {
             G.timer = 0;
-            advanceToNextSongOrRound(G, events);
+            beginSongReveal(G, events);
             return;
           }
 
@@ -364,10 +372,22 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
           if (G.timer <= 0) {
             G.timer = 0;
-            advanceToNextSongOrRound(G, events);
+            beginSongReveal(G, events);
           }
         },
       },
+    },
+
+    song_reveal: {
+      moves: {
+        continueReveal: ({ G, playerID, events }) => {
+          const player = G.players[playerID];
+          if (!player?.isHost) return;
+
+          proceedToNextSongOrRound(G, events);
+        },
+      },
+      next: "guessing",
     },
 
     round_results: {

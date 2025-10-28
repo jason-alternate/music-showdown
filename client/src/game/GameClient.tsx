@@ -1,4 +1,4 @@
-import { type JSX, useCallback, useEffect, useMemo, useState } from "react";
+import { type JSX, useCallback, useMemo, useState } from "react";
 import { Client, type BoardProps } from "boardgame.io/react";
 import { P2P } from "@boardgame.io/p2p";
 import type { GameState } from "@/schema";
@@ -6,8 +6,13 @@ import { MusicShowdownGame, MAX_PLAYERS } from "./MusicShowdownGame";
 import { ConnectionScreen } from "@/components/ConnectionScreen";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import {
+  SPECTATOR_PLAYER_ID,
+  claimPeerIdentity,
+  clearIdentity,
+  createSpectatorIdentity,
   getIdentity,
   promoteIdentityToHost,
+  releasePeerId,
   upsertIdentity,
   type PlayerIdentity,
   type PlayerRole,
@@ -20,6 +25,8 @@ export interface BoardIdentityHelpers {
   isHost: boolean;
   updatePlayerName: (name: string) => void;
   promoteToHost: (preferredName?: string) => void;
+  claimSeat: (preferredId?: string) => void;
+  releaseSeat: () => void;
 }
 
 export type BoardWithIdentity = (
@@ -45,16 +52,33 @@ const resolveInitialRole = (fallback: PlayerRole): PlayerRole => {
   return fallback;
 };
 
+const persistLastRole = (role: PlayerRole) => {
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem("musicshowdown.lastRole", role);
+  }
+};
+
 export const getInitialIdentity = (roomCode: string, initialRole: PlayerRole): LocalIdentity => {
+  const pendingRole =
+    typeof window !== "undefined" ? sessionStorage.getItem("musicshowdown.pendingRole") : null;
   const stored = getIdentity(roomCode);
-  if (stored) {
+  if (stored && !pendingRole) {
     if (typeof window !== "undefined") {
       sessionStorage.setItem("musicshowdown.lastRole", stored.role);
     }
     return stored;
   }
-  const role = resolveInitialRole(initialRole);
-  const identity = upsertIdentity(roomCode, role, readPlayerName());
+
+  if (stored && pendingRole) {
+    clearIdentity(roomCode);
+  }
+
+  const resolvedRole = resolveInitialRole(initialRole);
+  if (resolvedRole === "peer") {
+    return createSpectatorIdentity(readPlayerName());
+  }
+
+  const identity = upsertIdentity(roomCode, resolvedRole, readPlayerName());
   if (typeof window !== "undefined") {
     sessionStorage.setItem("musicshowdown.lastRole", identity.role);
   }
@@ -72,11 +96,19 @@ export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
     getInitialIdentity(roomCode, defaultRole),
   );
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("musicshowdown.lastRole", identity.role);
-    }
-  }, [identity.role]);
+  const setIdentityAndPersist = useCallback(
+    (updater: LocalIdentity | ((previous: LocalIdentity) => LocalIdentity)) => {
+      setIdentity((previous) => {
+        const next =
+          typeof updater === "function"
+            ? (updater as (value: LocalIdentity) => LocalIdentity)(previous)
+            : updater;
+        persistLastRole(next.role);
+        return next;
+      });
+    },
+    [],
+  );
 
   const updatePlayerName = useCallback(
     (name: string) => {
@@ -87,21 +119,56 @@ export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
       if (typeof window !== "undefined") {
         localStorage.setItem("playerName", trimmed);
       }
-      const updated = upsertIdentity(roomCode, identity.role, trimmed);
-      setIdentity(updated);
+
+      setIdentityAndPersist((previous) => {
+        if (previous.role === "spectator") {
+          return {
+            ...previous,
+            playerName: trimmed,
+          };
+        }
+
+        return upsertIdentity(roomCode, previous.role, trimmed);
+      });
     },
-    [identity.role, roomCode],
+    [roomCode, setIdentityAndPersist],
   );
 
   const promoteToHost = useCallback(
     (preferredName?: string) => {
-      setIdentity((previous) => {
+      setIdentityAndPersist((previous) => {
         const name = preferredName?.trim().slice(0, 24) || previous.playerName;
         return promoteIdentityToHost(roomCode, name);
       });
     },
-    [roomCode],
+    [roomCode, setIdentityAndPersist],
   );
+
+  const claimSeat = useCallback(
+    (preferredId?: string) => {
+      setIdentityAndPersist((previous) => {
+        if (previous.role === "host") return previous;
+
+        const trimmedName = previous.playerName.trim() || readPlayerName();
+        const claimed = claimPeerIdentity(roomCode, trimmedName, preferredId);
+        return {
+          ...claimed,
+          role: "peer",
+        };
+      });
+    },
+    [roomCode, setIdentityAndPersist],
+  );
+
+  const releaseSeat = useCallback(() => {
+    setIdentityAndPersist((previous) => {
+      if (previous.role !== "peer" || previous.playerID === SPECTATOR_PLAYER_ID) {
+        return previous;
+      }
+      releasePeerId(roomCode, previous.playerID);
+      return createSpectatorIdentity(previous.playerName);
+    });
+  }, [roomCode, setIdentityAndPersist]);
 
   const boardWithIdentity = useMemo(() => {
     const BoardComponent = board;
@@ -113,10 +180,12 @@ export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
           isHost={identity.role === "host"}
           updatePlayerName={updatePlayerName}
           promoteToHost={promoteToHost}
+          claimSeat={claimSeat}
+          releaseSeat={releaseSeat}
         />
       );
     };
-  }, [board, identity, promoteToHost, updatePlayerName]);
+  }, [board, identity, promoteToHost, updatePlayerName, claimSeat, releaseSeat]);
 
   const GameClientComponent = useMemo(
     () =>
@@ -146,8 +215,8 @@ export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
     <GameClientComponent
       key={`${roomCode}:${identity.playerID}:${identity.credentials}:${identity.role}`}
       matchID={roomCode}
-      playerID={identity.playerID}
-      credentials={identity.credentials}
+      playerID={identity.role === "spectator" ? undefined : identity.playerID}
+      credentials={identity.role === "spectator" ? undefined : identity.credentials}
     />
   );
 }

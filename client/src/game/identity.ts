@@ -1,7 +1,7 @@
 import { generateCredentials } from "@boardgame.io/p2p";
 import { MAX_PLAYERS } from "./MusicShowdownGame";
 
-export type PlayerRole = "host" | "peer";
+export type PlayerRole = "host" | "peer" | "spectator";
 
 export interface PlayerIdentity {
   playerID: string;
@@ -14,6 +14,8 @@ const KEY_PREFIX = "musicshowdown.identity";
 const HOST_PLAYER_ID = "0";
 const MIN_PEER_ID = 1;
 const MAX_PEER_ID = Math.max(MIN_PEER_ID, MAX_PLAYERS - 1);
+
+export const SPECTATOR_PLAYER_ID = "spectator";
 
 const createStorageKey = (roomCode: string) => `${KEY_PREFIX}.${roomCode}`;
 const createUsedIdsKey = (roomCode: string) => `${KEY_PREFIX}.${roomCode}.used`;
@@ -90,16 +92,117 @@ export function getIdentity(roomCode: string): PlayerIdentity | null {
   }
 }
 
+export function createSpectatorIdentity(playerName: string): PlayerIdentity {
+  return {
+    playerID: SPECTATOR_PLAYER_ID,
+    credentials: "",
+    role: "spectator",
+    playerName,
+  };
+}
+
+export function claimPeerIdentity(
+  roomCode: string,
+  playerName: string,
+  preferredId?: string,
+): PlayerIdentity {
+  if (typeof window === "undefined") {
+    return {
+      playerID: preferredId ?? String(MIN_PEER_ID),
+      credentials: generateCredentials(),
+      role: "peer",
+      playerName,
+    };
+  }
+
+  const used = readUsedIds(roomCode);
+  let playerID: string | undefined = preferredId;
+
+  if (playerID) {
+    if (used.has(playerID)) {
+      playerID = undefined;
+    } else {
+      used.add(playerID);
+      writeUsedIds(roomCode, used);
+    }
+  }
+
+  const identity: PlayerIdentity = {
+    playerID: playerID ?? allocatePeerId(roomCode, used),
+    credentials: generateCredentials(),
+    role: "peer",
+    playerName,
+  };
+
+  used.add(identity.playerID);
+  writeUsedIds(roomCode, used);
+  localStorage.setItem(createStorageKey(roomCode), JSON.stringify(identity));
+  return identity;
+}
+
+export function createPeerAssignment(roomCode: string, playerName: string): PlayerIdentity {
+  if (typeof window === "undefined") {
+    return {
+      playerID: String(MIN_PEER_ID),
+      credentials: generateCredentials(),
+      role: "peer",
+      playerName,
+    };
+  }
+
+  const used = readUsedIds(roomCode);
+  const playerID = allocatePeerId(roomCode, used);
+
+  const identity: PlayerIdentity = {
+    playerID,
+    credentials: generateCredentials(),
+    role: "peer",
+    playerName,
+  };
+
+  used.add(playerID);
+  writeUsedIds(roomCode, used);
+  return identity;
+}
+
+export function applyAssignedIdentity(roomCode: string, identity: PlayerIdentity): PlayerIdentity {
+  if (typeof window === "undefined") {
+    return identity;
+  }
+
+  const normalized: PlayerIdentity = {
+    ...identity,
+    role: "peer",
+    playerName: identity.playerName?.trim().slice(0, 24) || "Player",
+  };
+
+  const used = readUsedIds(roomCode);
+  used.add(normalized.playerID);
+  writeUsedIds(roomCode, used);
+  localStorage.setItem(createStorageKey(roomCode), JSON.stringify(normalized));
+  return normalized;
+}
+
+export function releasePeerId(roomCode: string, playerID: string) {
+  if (typeof window === "undefined") return;
+  if (!playerID || playerID === HOST_PLAYER_ID) return;
+  const used = readUsedIds(roomCode);
+  if (used.delete(playerID)) {
+    writeUsedIds(roomCode, used);
+  }
+}
+
 export function upsertIdentity(
   roomCode: string,
   role: PlayerRole,
   playerName: string,
 ): PlayerIdentity {
+  const normalizedRole: PlayerRole = role === "spectator" ? "peer" : role;
   if (typeof window === "undefined") {
     return {
-      playerID: role === "host" ? HOST_PLAYER_ID : String(MIN_PEER_ID),
+      playerID: normalizedRole === "host" ? HOST_PLAYER_ID : String(MIN_PEER_ID),
       credentials: generateCredentials(),
-      role,
+      role: normalizedRole,
       playerName,
     };
   }
@@ -118,15 +221,14 @@ export function upsertIdentity(
       nextCredentials = generateCredentials();
     }
 
-    if (existing.role === "host" && role !== "host") {
-      role = "host";
-    }
+    const updatedRole: PlayerRole = existing.role === "host" ? "host" : normalizedRole;
+    const updatedPlayerId = updatedRole === "host" ? HOST_PLAYER_ID : nextPlayerId;
 
     const updated: PlayerIdentity = {
       ...existing,
-      role: existing.role === "host" ? existing.role : role,
+      role: updatedRole,
       playerName: playerName || existing.playerName,
-      playerID: role === "host" ? HOST_PLAYER_ID : nextPlayerId,
+      playerID: updatedPlayerId,
       credentials: nextCredentials,
     };
 
@@ -141,8 +243,8 @@ export function upsertIdentity(
     return updated;
   }
 
-  const identity: PlayerIdentity = createIdentity(roomCode, role, playerName);
-  if (role === "peer") {
+  const identity: PlayerIdentity = createIdentity(roomCode, normalizedRole, playerName);
+  if (normalizedRole === "peer") {
     const used = readUsedIds(roomCode);
     used.add(identity.playerID);
     writeUsedIds(roomCode, used);

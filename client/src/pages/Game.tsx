@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type JSX,
+} from "react";
 import { Link } from "@tanstack/react-router";
 import type { BoardProps } from "boardgame.io/react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +22,15 @@ import { YouTubeSearch } from "@/components/YouTubeSearch";
 import { YouTubePlayer } from "@/components/YouTubePlayer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import type {
+  GameState,
+  Player,
+  YouTubeVideo,
+  GuessInfo,
+  GuessLogEntry,
+  SongSelection,
+} from "@/schema";
 import {
   Trophy,
   CheckCircle,
@@ -28,12 +45,11 @@ import {
   Play,
   Pause,
 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import type { GameState, Player, YouTubeVideo, GuessInfo, GuessLogEntry } from "@/schema";
-import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
+import { SPECTATOR_PLAYER_ID } from "@/game/identity";
+import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
 
 type Settings = GameState["settings"];
 
@@ -95,28 +111,35 @@ const THEME_SUGGESTIONS = [
 
 const DEFAULT_MAX_START_SECONDS = 600;
 
-export default function GameBoard({
-  G,
-  ctx,
-  moves,
-  playerID,
-  matchID,
-  identity,
+interface SongPickingSectionProps {
+  headerControls: JSX.Element;
+  currentRound: GameState["currentRound"];
+  settings: Settings;
+  themeValue: string;
+  isHost: boolean;
+  handleThemeChange: (value: string) => void;
+  handleRandomTheme: () => void;
+  mySelection: SongSelection | null;
+  moves: GameBoardProps["moves"];
+  effectivePlayerId: string | null;
+  playerLookup: Map<string, Player>;
+  toast: ReturnType<typeof useToast>["toast"];
+}
+
+function SongPickingSection({
+  headerControls,
+  currentRound,
+  settings,
+  themeValue,
   isHost,
-  isActive,
-  updatePlayerName,
-  promoteToHost,
-}: GameBoardProps) {
-  const { toast } = useToast();
-
-  const phase = ctx.phase ?? G.phase;
-  const currentRound = G.currentRound ?? null;
-  const settings = G.settings;
-  const rawTimer = G.timer;
-  const timeRemaining = rawTimer ?? 0;
-
-  const [playerNameInput, setPlayerNameInput] = useState(identity.playerName);
-  const [themeDraft, setThemeDraft] = useState(currentRound?.theme ?? "");
+  handleThemeChange,
+  handleRandomTheme,
+  mySelection,
+  moves,
+  effectivePlayerId,
+  playerLookup,
+  toast,
+}: SongPickingSectionProps) {
   const [selectedVideo, setSelectedVideo] = useState<YouTubeVideo | null>(null);
   const [customTitle, setCustomTitle] = useState("");
   const [startSeconds, setStartSeconds] = useState(0);
@@ -125,260 +148,51 @@ export default function GameBoard({
   const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
     computeMaxStartSeconds(null, settings.playbackDuration),
   );
-  const [guess, setGuess] = useState("");
-  const [localSettings, setLocalSettings] = useState<Settings>(settings);
-  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    setPlayerNameInput(identity.playerName);
-  }, [identity.playerName]);
-
-  useEffect(() => {
-    setThemeDraft(currentRound?.theme ?? "");
-  }, [currentRound?.theme]);
-
-  useEffect(() => {
-    setLocalSettings(settings);
-    setMaxStartSeconds((previousMax) => {
-      const recalculated = computeMaxStartSeconds(
-        selectedVideo ? previewPlayerRef.current?.getDuration?.() : null,
-        settings.playbackDuration,
-      );
-      const clamped = clampStartSeconds(startSeconds, recalculated);
-      if (clamped !== startSeconds) {
-        setStartSeconds(clamped);
+  const updatePlaybackBounds = useCallback(() => {
+    const duration = previewPlayerRef.current?.getDuration?.();
+    const recalculated = computeMaxStartSeconds(duration, settings.playbackDuration);
+    setMaxStartSeconds((previousMax) =>
+      previousMax === recalculated ? previousMax : recalculated,
+    );
+    setStartSeconds((previousStart) => {
+      const clamped = clampStartSeconds(previousStart, recalculated);
+      if (clamped !== previousStart) {
         previewPlayerRef.current?.seekTo?.(clamped, true);
+        return clamped;
       }
-      if (recalculated !== previousMax) {
-        return recalculated;
-      }
-      return previousMax;
+      return previousStart;
     });
-  }, [settings]);
-
-  const effectivePlayerId = playerID ?? identity.playerID;
-
-  const headerControls = (
-    <div className="absolute top-4 right-4 flex items-center gap-2">
-      <ThemeToggle />
-    </div>
-  );
+  }, [settings.playbackDuration]);
 
   useEffect(() => {
-    if (phase !== "lobby") return;
+    updatePlaybackBounds();
+  }, [updatePlaybackBounds]);
 
-    const id = effectivePlayerId;
-    if (!id) return;
-
-    const name = identity.playerName.trim();
-    if (!name) return;
-
-    const existing = G.players?.[id] as Player | undefined;
-    if (!existing || existing.name !== name || !existing.connected) {
-      moves.setPlayerName?.(name);
-      setStartSeconds(0);
-      setPreviewing(false);
-      previewPlayerRef.current = null;
-    }
-  }, [G.players, identity.playerName, moves, phase, effectivePlayerId]);
-
-  useEffect(() => {
-    if (phase !== "song_picking") {
-      setSelectedVideo(null);
-      setCustomTitle("");
+  const handleVideoSelect = useCallback(
+    (video: YouTubeVideo) => {
+      setSelectedVideo(video);
+      setCustomTitle(video.title);
       setStartSeconds(0);
       setPreviewing(false);
       previewPlayerRef.current = null;
       setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
-    }
-    if (phase !== "guessing") {
-      setGuess("");
-    }
-  }, [phase]);
-
-  const players = Object.values(G.players ?? {})
-    .map((player) => player as Player)
-    .sort((a, b) => a.id.localeCompare(b.id));
-  const themeValue = currentRound?.theme ?? themeDraft;
-  const roundScores = currentRound?.roundScores ?? {};
-  const guesses = currentRound?.guesses ?? {};
-  const correctGuessers = currentRound?.correctGuessers ?? {};
-  const guessLog = currentRound?.guessLog ?? [];
-  const currentSongOwnerId = currentRound?.currentPlayerId ?? null;
-  const currentSong = currentSongOwnerId
-    ? (currentRound?.songSelections?.[currentSongOwnerId] ?? null)
-    : null;
-  const mySelection = effectivePlayerId
-    ? (currentRound?.songSelections?.[effectivePlayerId] ?? null)
-    : null;
-  const myGuessEntries: GuessInfo[] = effectivePlayerId ? (guesses[effectivePlayerId] ?? []) : [];
-  const lastMyGuess = myGuessEntries[myGuessEntries.length - 1] ?? null;
-  const hasCorrectGuess = Boolean(effectivePlayerId && correctGuessers[effectivePlayerId]);
-
-  const canSubmitGuess = Boolean(
-    phase === "guessing" &&
-    currentSongOwnerId &&
-    effectivePlayerId &&
-    currentSongOwnerId !== effectivePlayerId &&
-    !hasCorrectGuess &&
-    (rawTimer === null || rawTimer > 0),
+    },
+    [settings.playbackDuration],
   );
 
-  const lobbyOrder = G.lobbyOrder ?? [];
-  const maxPlayers = G.maxPlayers ?? MAX_PLAYERS;
-
-  const connectedPlayers = useMemo(() => {
-    const list = players.filter((player) => player.connected);
-    list.sort((a, b) => {
-      const indexA = lobbyOrder.indexOf(a.id);
-      const indexB = lobbyOrder.indexOf(b.id);
-      if (indexA === -1 && indexB === -1) {
-        return a.id.localeCompare(b.id);
-      }
-      if (indexA === -1) return 1;
-      if (indexB === -1) return -1;
-      return indexA - indexB;
-    });
-    return list;
-  }, [lobbyOrder, players]);
-
-  useEffect(() => {
-    if (identity.role === "host") return;
-    if (!effectivePlayerId) return;
-    const activeHost = players.find((player) => player.isHost && player.connected);
-    if (activeHost) return;
-
-    const me = players.find((player) => player.id === effectivePlayerId);
-    if (!me?.connected) return;
-
-    const nextCandidate = connectedPlayers[0];
-    if (!nextCandidate || nextCandidate.id !== effectivePlayerId) return;
-
-    promoteToHost(identity.playerName);
-    toast({ title: "Host reassigned", description: "You are now the host for this room." });
-  }, [
-    connectedPlayers,
-    effectivePlayerId,
-    identity.playerName,
-    identity.role,
-    players,
-    promoteToHost,
-    toast,
-  ]);
-
-  const lobbySlots = useMemo<(Player | null)[]>(() => {
-    const ordered = lobbyOrder
-      .map((id) => G.players[id] as Player | undefined)
-      .filter((player): player is Player => Boolean(player));
-    const seen = new Set(ordered.map((player) => player.id));
-    const remaining = players.filter((player) => !seen.has(player.id));
-    const combined = [...ordered, ...remaining];
-    return Array.from({ length: maxPlayers }, (_, index) => combined[index] ?? null);
-  }, [G.players, lobbyOrder, maxPlayers, players]);
-
-  const roundLeaderboard = useMemo(() => {
-    return players
-      .map((player) => ({ player, roundScore: roundScores[player.id] ?? 0 }))
-      .sort((a, b) => b.roundScore - a.roundScore);
-  }, [players, roundScores]);
-
-  const totalLeaderboard = useMemo(() => [...players].sort((a, b) => b.score - a.score), [players]);
-
-  const connectedCount = connectedPlayers.length;
-  const openSlots = Math.max(maxPlayers - connectedCount, 0);
-
-  const handleRandomTheme = () => {
-    if (!isHost) return;
-    const trimmedCurrent = (currentRound?.theme ?? themeDraft).trim();
-    const pool =
-      THEME_SUGGESTIONS.length > 1
-        ? THEME_SUGGESTIONS.filter((option) => option !== trimmedCurrent)
-        : THEME_SUGGESTIONS;
-    const selection = pool[Math.floor(Math.random() * pool.length)] ?? THEME_SUGGESTIONS[0];
-    if (selection) {
-      handleThemeChange(selection);
-    }
-  };
-
-  const sortedGuessLog = useMemo(() => {
-    return [...guessLog].sort((a, b) => {
-      if (a.songIndex !== b.songIndex) return a.songIndex - b.songIndex;
-      return a.time - b.time;
-    });
-  }, [guessLog]);
-
-  const currentSongGuessLog = useMemo(() => {
-    if (!currentRound) return [] as GuessLogEntry[];
-    const songIndex = currentRound.currentSongIndex;
-    if (songIndex === undefined || songIndex === null) return [] as GuessLogEntry[];
-    return guessLog
-      .filter((entry) => entry.songIndex === songIndex)
-      .sort((a, b) => a.time - b.time);
-  }, [guessLog, currentRound?.currentSongIndex]);
-
-  const formatGuessTime = (time: number) => {
-    if (Number.isNaN(time) || !Number.isFinite(time)) return "0s";
-    const seconds = Math.max(0, Math.round(time));
-    return `${seconds}s`;
-  };
-
-  useEffect(() => {
-    if (phase !== "guessing") return;
-    setGuess("");
-  }, [phase, currentSongOwnerId]);
-
-  useEffect(() => {
-    if (!isHost) return;
-    if (phase !== "song_picking" && phase !== "guessing") return;
-    if (rawTimer === null || rawTimer <= 0) return;
-
-    const interval = window.setInterval(() => {
-      moves.tickTimer?.();
-    }, 1000);
-
-    return () => window.clearInterval(interval);
-  }, [isHost, phase, rawTimer, moves]);
-
-  const appliedSettings = isHost ? localSettings : settings;
-
-  const handlePlayerNameCommit = () => {
-    const trimmed = playerNameInput.trim().slice(0, 24);
-    if (!trimmed) return;
-    updatePlayerName(trimmed);
-    if (phase === "lobby") {
-      moves.setPlayerName?.(trimmed);
-    }
-  };
-
-  const handleThemeChange = (value: string) => {
-    setThemeDraft(value);
-    if (isHost) {
-      moves.setTheme?.(value);
-    }
-  };
-
-  const handleVideoSelect = (video: YouTubeVideo) => {
-    setSelectedVideo(video);
-    setCustomTitle(video.title);
-    setStartSeconds(0);
-    setPreviewing(false);
-    previewPlayerRef.current?.stopVideo?.();
-    previewPlayerRef.current = null;
-    setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
-  };
-
-  const handleConfirmSong = () => {
+  const handleConfirmSong = useCallback(() => {
     const trimmed = customTitle.trim();
-    if (!selectedVideo || !trimmed) return;
+    if (!selectedVideo || !trimmed || !currentRound) return;
 
-    const conflictingEntry = Object.entries(G.currentRound?.songSelections ?? {}).find(
+    const conflictingEntry = Object.entries(currentRound.songSelections ?? {}).find(
       ([playerId, selection]) =>
         playerId !== effectivePlayerId && selection.videoId === selectedVideo.id,
     );
 
     if (conflictingEntry) {
       const [conflictingPlayerId] = conflictingEntry;
-      const conflictingPlayer = G.players?.[conflictingPlayerId] as Player | undefined;
+      const conflictingPlayer = playerLookup.get(conflictingPlayerId);
       const conflictingPlayerName = conflictingPlayer?.name ?? "Another player";
 
       toast({
@@ -404,9 +218,19 @@ export default function GameBoard({
     setPreviewing(false);
     previewPlayerRef.current = null;
     setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
-  };
+  }, [
+    customTitle,
+    currentRound,
+    effectivePlayerId,
+    moves,
+    playerLookup,
+    selectedVideo,
+    settings.playbackDuration,
+    startSeconds,
+    toast,
+  ]);
 
-  const togglePreview = () => {
+  const togglePreview = useCallback(() => {
     const player = previewPlayerRef.current;
     if (!player) return;
     const state = player.getPlayerState?.();
@@ -418,77 +242,724 @@ export default function GameBoard({
       player.playVideo?.();
       setPreviewing(true);
     }
-  };
+  }, [startSeconds, previewing]);
 
-  const handlePreviewReady = (player: any) => {
-    previewPlayerRef.current = player;
-    const duration = player.getDuration?.();
-    const computedMax = computeMaxStartSeconds(duration, settings.playbackDuration);
-    setMaxStartSeconds(computedMax);
-    setStartSeconds((prev) => {
-      const clamped = clampStartSeconds(prev, computedMax);
-      if (clamped !== prev) {
-        player.seekTo?.(clamped, true);
-        return clamped;
+  const handlePreviewReady = useCallback(
+    (player: any) => {
+      previewPlayerRef.current = player;
+      const duration = player.getDuration?.();
+      const computedMax = computeMaxStartSeconds(duration, settings.playbackDuration);
+      setMaxStartSeconds(computedMax);
+      setStartSeconds((prev) => {
+        const clamped = clampStartSeconds(prev, computedMax);
+        if (clamped !== prev) {
+          player.seekTo?.(clamped, true);
+          return clamped;
+        }
+        return prev;
+      });
+      player.seekTo?.(startSeconds, true);
+      if (previewing) {
+        player.playVideo?.();
+      } else {
+        player.pauseVideo?.();
       }
-      return prev;
-    });
-    player.seekTo?.(startSeconds, true);
-    if (previewing) {
-      player.playVideo?.();
-    } else {
-      player.pauseVideo?.();
-    }
-  };
+    },
+    [previewing, settings.playbackDuration, startSeconds],
+  );
 
-  const handlePreviewEnd = () => {
+  const handlePreviewEnd = useCallback(() => {
     setPreviewing(false);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-background">
+      {headerControls}
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="space-y-6">
+          <Card className="bg-primary/10 border-primary">
+            <CardHeader>
+              <CardTitle className="font-heading text-2xl mb-1">Pick Your Song</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Theme:{" "}
+                <span className="font-semibold text-foreground">
+                  {currentRound?.theme ?? "Pending"}
+                </span>
+              </p>
+            </CardHeader>
+          </Card>
+
+          {!mySelection && (
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <Card className="lg:col-span-1">
+                <CardHeader>
+                  <CardTitle className="font-heading">Search YouTube</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <YouTubeSearch onSelect={handleVideoSelect} selectedVideoId={selectedVideo?.id} />
+                </CardContent>
+              </Card>
+
+              <Card className="self-start">
+                <CardHeader>
+                  <CardTitle className="font-heading">Selected Song</CardTitle>
+                  <CardDescription>Fine-tune the title before locking it in.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedVideo ? (
+                    <div className="space-y-4">
+                      <div className="overflow-hidden rounded-lg border">
+                        <YouTubePlayer
+                          videoId={selectedVideo.id}
+                          autoplay={false}
+                          startSeconds={startSeconds}
+                          interactive
+                          onReady={handlePreviewReady}
+                          onEnd={handlePreviewEnd}
+                        />
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor="song-title">Song title to guess</Label>
+                          <Input
+                            id="song-title"
+                            value={customTitle}
+                            onChange={(event) => setCustomTitle(event.target.value)}
+                            className="mt-2"
+                            placeholder="Edit the title if needed..."
+                            data-testid="input-song-title"
+                          />
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            This is what other players will try to guess.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="start-seconds">Start playback at</Label>
+                            <span className="text-xs text-muted-foreground">
+                              {formatSeconds(startSeconds)}
+                            </span>
+                          </div>
+                          <Slider
+                            id="start-seconds"
+                            min={0}
+                            max={maxStartSeconds}
+                            step={1}
+                            value={toSliderValue(startSeconds)}
+                            onValueChange={(values) => {
+                              const value = clampStartSeconds(values[0] ?? 0, maxStartSeconds);
+                              setStartSeconds(value);
+                              previewPlayerRef.current?.seekTo?.(value, true);
+                            }}
+                            data-testid="slider-start-seconds"
+                          />
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="number"
+                              min={0}
+                              max={maxStartSeconds}
+                              value={startSeconds}
+                              onChange={(event: ChangeEvent<HTMLInputElement>) => {
+                                const next = clampStartSeconds(
+                                  Number(event.target.value),
+                                  maxStartSeconds,
+                                );
+                                setStartSeconds(next);
+                                previewPlayerRef.current?.seekTo?.(next, true);
+                              }}
+                              className="w-24"
+                              data-testid="input-start-seconds"
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={togglePreview}
+                              disabled={!previewPlayerRef.current}
+                              data-testid="button-preview"
+                            >
+                              {previewing ? (
+                                <>
+                                  <Pause className="mr-2 h-4 w-4" /> Pause Preview
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="mr-2 h-4 w-4" /> Play Preview
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                        <Button
+                          onClick={handleConfirmSong}
+                          className="w-full"
+                          disabled={!customTitle.trim()}
+                          data-testid="button-confirm-song"
+                        >
+                          Confirm Selection
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex min-h-[220px] items-center justify-center text-center text-sm text-muted-foreground">
+                      Choose a song from the search results to review its details here.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {mySelection && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="font-heading">You are all set!</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  {mySelection.thumbnail ? (
+                    <div className="relative w-full max-w-[200px] overflow-hidden rounded-lg border bg-muted sm:w-48">
+                      <img
+                        src={mySelection.thumbnail}
+                        alt={mySelection.customTitle || mySelection.originalTitle}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  ) : null}
+                  <div className="space-y-1">
+                    <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      Selected song
+                    </span>
+                    <div className="text-lg font-semibold leading-snug">
+                      {mySelection.customTitle || mySelection.originalTitle}
+                    </div>
+                    {(mySelection.startSeconds ?? 0) > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        Starts at {formatSeconds(mySelection.startSeconds ?? 0)}
+                      </div>
+                    )}
+                    {mySelection.customTitle &&
+                      mySelection.originalTitle &&
+                      mySelection.customTitle.trim() !== mySelection.originalTitle.trim() && (
+                        <div className="text-sm text-muted-foreground">
+                          Original title: {mySelection.originalTitle}
+                        </div>
+                      )}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground" data-testid="text-waiting-selection">
+                  Waiting for other players to finish picking.
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">Need inspiration? Pick a suggestion.</p>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRandomTheme}
+              disabled={!isHost}
+              data-testid="button-random-theme"
+            >
+              Surprise Me
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {THEME_SUGGESTIONS.map((suggestion) => (
+              <Button
+                key={suggestion}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => handleThemeChange(suggestion)}
+                disabled={!isHost}
+                className="whitespace-nowrap"
+              >
+                {suggestion}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function GameBoard({
+  G,
+  ctx,
+  moves,
+  playerID,
+  matchID,
+  identity,
+  isHost,
+  isActive,
+  isConnected,
+  updatePlayerName,
+  promoteToHost,
+  claimSeat,
+  releaseSeat,
+}: GameBoardProps) {
+  const { toast } = useToast();
+
+  const phase = ctx.phase ?? G.phase;
+  const currentRound = G.currentRound ?? null;
+  const settings = G.settings;
+  const rawTimer = G.timer;
+  const timeRemaining = rawTimer ?? 0;
+
+  const [playerNameDraft, setPlayerNameDraft] = useState<string | null>(null);
+  const [guessMap, setGuessMap] = useState<Record<string, string>>({});
+  const [localSettings, setLocalSettings] = useState<Settings>(settings);
+  const [copied, setCopied] = useState(false);
+
+  const syncLocalSettingsFromGame = useCallback(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    syncLocalSettingsFromGame();
+  }, [syncLocalSettingsFromGame]);
+
+  const effectivePlayerId = useMemo(() => {
+    const candidate = playerID ?? identity.playerID;
+    if (!candidate || identity.role === "spectator" || candidate === SPECTATOR_PLAYER_ID) {
+      return null;
+    }
+    return candidate;
+  }, [playerID, identity.playerID, identity.role]);
+
+  const headerControls = (
+    <div className="absolute top-4 right-4 flex items-center gap-2">
+      <ThemeToggle />
+    </div>
+  );
+
+  const ensureLobbyPlayerNameIsRegistered = useCallback(() => {
+    if (phase !== "lobby") return;
+
+    const id = effectivePlayerId;
+    if (!id) return;
+
+    const name = identity.playerName.trim();
+    if (!name) return;
+
+    const existing = G.players?.[id] as Player | undefined;
+    if (!existing || existing.name !== name || !existing.connected) {
+      moves.setPlayerName?.(name);
+    }
+  }, [G.players, identity.playerName, moves, phase, effectivePlayerId]);
+
+  useEffect(() => {
+    ensureLobbyPlayerNameIsRegistered();
+  }, [ensureLobbyPlayerNameIsRegistered]);
+
+  const players = Object.values(G.players ?? {})
+    .map((player) => player as Player)
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const themeValue = currentRound?.theme ?? "";
+
+  const roundScores = currentRound?.roundScores ?? {};
+  const guesses = currentRound?.guesses ?? {};
+  const correctGuessers = currentRound?.correctGuessers ?? {};
+  const guessLog = currentRound?.guessLog ?? [];
+  const currentSongOwnerId = currentRound?.currentPlayerId ?? null;
+  const revealSongOwnerId = currentRound?.revealSongOwnerId ?? null;
+  const revealSongIndex = currentRound?.revealSongIndex ?? null;
+  const activeSongIndex =
+    phase === "song_reveal" && revealSongIndex !== null && revealSongIndex !== undefined
+      ? revealSongIndex
+      : (currentRound?.currentSongIndex ?? null);
+  const currentSong = currentSongOwnerId
+    ? (currentRound?.songSelections?.[currentSongOwnerId] ?? null)
+    : null;
+  const revealSong = revealSongOwnerId
+    ? (currentRound?.songSelections?.[revealSongOwnerId] ?? null)
+    : null;
+  const mySelection = effectivePlayerId
+    ? (currentRound?.songSelections?.[effectivePlayerId] ?? null)
+    : null;
+  const myGuessEntries: GuessInfo[] = effectivePlayerId ? (guesses[effectivePlayerId] ?? []) : [];
+  const lastMyGuess = myGuessEntries[myGuessEntries.length - 1] ?? null;
+  const hasCorrectGuess = Boolean(effectivePlayerId && correctGuessers[effectivePlayerId]);
+
+  const canSubmitGuess = Boolean(
+    phase === "guessing" &&
+      currentSongOwnerId &&
+      effectivePlayerId &&
+      currentSongOwnerId !== effectivePlayerId &&
+      !hasCorrectGuess &&
+      (rawTimer === null || rawTimer > 0),
+  );
+
+  const lobbyOrder = G.lobbyOrder ?? [];
+  const maxPlayers = G.maxPlayers ?? MAX_PLAYERS;
+
+  const playersById = useMemo(() => {
+    const map = new Map<string, Player>();
+    players.forEach((player) => map.set(player.id, player));
+    return map;
+  }, [players]);
+
+  const connectedPlayers = useMemo(() => {
+    const list = players.filter((player) => player.connected);
+    list.sort((a, b) => {
+      const indexA = lobbyOrder.indexOf(a.id);
+      const indexB = lobbyOrder.indexOf(b.id);
+      if (indexA === -1 && indexB === -1) {
+        return a.id.localeCompare(b.id);
+      }
+      if (indexA === -1) return 1;
+      if (indexB === -1) return -1;
+      return indexA - indexB;
+    });
+    return list;
+  }, [lobbyOrder, players]);
+
+  const attemptedSeatsRef = useRef<Set<string>>(new Set());
+  const seatRetryRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    if (identity.role === "host") {
+      attemptedSeatsRef.current.clear();
+      seatRetryRef.current.clear();
+      return;
+    }
+
+    if (identity.role === "spectator") {
+      const attempted = attemptedSeatsRef.current;
+      const occupied = new Set(
+        players.filter((player) => player.connected).map((player) => player.id),
+      );
+
+      const findSeat = () => {
+        for (let seat = 1; seat < maxPlayers; seat += 1) {
+          const id = String(seat);
+          if (occupied.has(id)) continue;
+          if (attempted.has(id)) continue;
+          return id;
+        }
+        return null;
+      };
+
+      let candidate = findSeat();
+
+      if (!candidate && attempted.size > 0) {
+        attempted.clear();
+        candidate = findSeat();
+      }
+
+      if (candidate) {
+        attempted.add(candidate);
+        claimSeat(candidate);
+      }
+      return;
+    }
+
+    if (identity.role === "peer") {
+      attemptedSeatsRef.current.clear();
+      seatRetryRef.current.clear();
+    }
+  }, [identity.role, players, maxPlayers, claimSeat]);
+
+  useEffect(() => {
+    if (identity.role !== "peer") return;
+    const seatId = identity.playerID;
+    if (!seatId || seatId === SPECTATOR_PLAYER_ID) return;
+
+    const occupant = playersById.get(seatId);
+    if (occupant?.connected) {
+      seatRetryRef.current.delete(seatId);
+      return;
+    }
+
+    const attemptCount = seatRetryRef.current.get(seatId) ?? 0;
+    if (attemptCount >= maxPlayers) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      const latest = playersById.get(seatId);
+      if (latest?.connected) {
+        seatRetryRef.current.delete(seatId);
+        return;
+      }
+
+      seatRetryRef.current.set(seatId, attemptCount + 1);
+      attemptedSeatsRef.current.delete(seatId);
+      releaseSeat();
+    }, 4000);
+
+    return () => window.clearTimeout(timeout);
+  }, [identity.role, identity.playerID, playersById, releaseSeat, maxPlayers]);
+
+  useEffect(() => {
+    if (identity.role !== "peer") return;
+    if (isConnected) return;
+
+    const seatId = identity.playerID;
+    if (!seatId || seatId === SPECTATOR_PLAYER_ID) return;
+
+    const timeout = window.setTimeout(() => {
+      attemptedSeatsRef.current.delete(seatId);
+      seatRetryRef.current.delete(seatId);
+      releaseSeat();
+    }, 3000);
+
+    return () => window.clearTimeout(timeout);
+  }, [identity.role, identity.playerID, isConnected, releaseSeat]);
+
+  useEffect(() => {
+    if (phase !== "lobby") return;
+    if (identity.role !== "peer") return;
+    if (!effectivePlayerId) return;
+
+    const name = identity.playerName.trim();
+    if (!name) return;
+
+    const attemptRegistration = () => {
+      try {
+        moves.setPlayerName?.(name);
+      } catch (error) {
+        console.warn("Failed to register player name", error);
+      }
+    };
+
+    const occupant = playersById.get(effectivePlayerId);
+    if (occupant?.connected) {
+      if (!occupant.name || occupant.name.trim() !== name) {
+        attemptRegistration();
+      }
+      return;
+    }
+
+    attemptRegistration();
+    const interval = window.setInterval(() => {
+      const latest = playersById.get(effectivePlayerId);
+      if (latest?.connected) {
+        if (!latest.name || latest.name.trim() !== name) {
+          attemptRegistration();
+        }
+        window.clearInterval(interval);
+        return;
+      }
+      attemptRegistration();
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [phase, identity.role, identity.playerName, effectivePlayerId, playersById, moves]);
+
+  const lobbySlots = useMemo<(Player | null)[]>(() => {
+    const ordered = lobbyOrder
+      .map((id) => G.players[id] as Player | undefined)
+      .filter((player): player is Player => Boolean(player));
+    const seen = new Set(ordered.map((player) => player.id));
+    const remaining = players.filter((player) => !seen.has(player.id));
+    const combined = [...ordered, ...remaining];
+    return Array.from({ length: maxPlayers }, (_, index) => combined[index] ?? null);
+  }, [G.players, lobbyOrder, maxPlayers, players]);
+
+  const roundLeaderboard = useMemo(() => {
+    return players
+      .map((player) => ({ player, roundScore: roundScores[player.id] ?? 0 }))
+      .sort((a, b) => b.roundScore - a.roundScore);
+  }, [players, roundScores]);
+
+  const totalLeaderboard = useMemo(() => [...players].sort((a, b) => b.score - a.score), [players]);
+
+  const connectedCount = connectedPlayers.length;
+  const openSlots = Math.max(maxPlayers - connectedCount, 0);
+
+  const handleThemeChange = useCallback(
+    (value: string) => {
+      if (!isHost) return;
+      moves.setTheme?.(value);
+    },
+    [isHost, moves],
+  );
+
+  const handleRandomTheme = useCallback(() => {
+    if (!isHost) return;
+    const trimmedCurrent = (currentRound?.theme ?? "").trim();
+    const pool =
+      THEME_SUGGESTIONS.length > 1
+        ? THEME_SUGGESTIONS.filter((option) => option !== trimmedCurrent)
+        : THEME_SUGGESTIONS;
+    const selection = pool[Math.floor(Math.random() * pool.length)] ?? THEME_SUGGESTIONS[0];
+    if (selection) {
+      handleThemeChange(selection);
+    }
+  }, [currentRound?.theme, handleThemeChange, isHost]);
+
+  const activeSongGuessLog = useMemo(() => {
+    if (!currentRound) return [] as GuessLogEntry[];
+    if (activeSongIndex === null || activeSongIndex === undefined) {
+      return [] as GuessLogEntry[];
+    }
+    return guessLog
+      .filter((entry) => entry.songIndex === activeSongIndex)
+      .sort((a, b) => a.time - b.time);
+  }, [activeSongIndex, currentRound, guessLog]);
+
+  const formatGuessTime = (time: number) => {
+    if (Number.isNaN(time) || !Number.isFinite(time)) return "0s";
+    const seconds = Math.max(0, Math.round(time));
+    return `${seconds}s`;
   };
 
-  const handleSubmitGuess = () => {
+  const renderGuessLogBody = (entries: GuessLogEntry[]): JSX.Element => {
+    if (entries.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center px-6 py-12">
+          <p className="text-center text-sm text-muted-foreground">No guesses yet for this song.</p>
+        </div>
+      );
+    }
+
+    return (
+      <ScrollArea className="h-[360px] px-6 pb-6">
+        <div className="space-y-4">
+          {entries.map((entry) => {
+            const isSelf = effectivePlayerId && entry.playerId === effectivePlayerId;
+            return (
+              <div
+                key={entry.id}
+                className={cn("flex flex-col gap-2", isSelf ? "items-end" : "items-start")}
+              >
+                <div
+                  className={cn("flex items-start gap-3", isSelf ? "flex-row-reverse" : "flex-row")}
+                >
+                  <PlayerAvatar playerId={entry.playerId} playerName={entry.playerName} size="sm" />
+                  <div className={cn("space-y-1", isSelf ? "text-right" : "text-left")}>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span>{isSelf ? "You" : entry.playerName}</span>
+                      {entry.isCorrect && <Badge>Correct</Badge>}
+                    </div>
+                    <div
+                      className={cn(
+                        "max-w-xs rounded-md px-3 py-2 text-sm",
+                        isSelf
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted/40 text-muted-foreground",
+                      )}
+                    >
+                      "{entry.guess}"
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs text-muted-foreground">{formatGuessTime(entry.time)}</span>
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
+    );
+  };
+
+  const startHostTimerTick = useCallback(() => {
+    if (!isHost) return undefined;
+    if (phase !== "song_picking" && phase !== "guessing") return undefined;
+    if (rawTimer === null || rawTimer <= 0) return undefined;
+
+    const interval = window.setInterval(() => {
+      moves.tickTimer?.();
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [isHost, moves, phase, rawTimer]);
+
+  useEffect(() => {
+    const cleanup = startHostTimerTick();
+    return cleanup;
+  }, [startHostTimerTick]);
+
+  const appliedSettings = isHost ? localSettings : settings;
+
+  const activeGuessKey = useMemo(() => {
+    if (phase !== "guessing" || !currentRound) return "inactive";
+    const index = currentRound.currentSongIndex ?? currentRound.revealSongIndex ?? 0;
+    return `${currentRound.roundNumber}:${index}`;
+  }, [currentRound, phase]);
+
+  const guess = guessMap[activeGuessKey] ?? "";
+
+  const updateGuess = useCallback(
+    (value: string) => {
+      setGuessMap((previous) => ({ ...previous, [activeGuessKey]: value }));
+    },
+    [activeGuessKey],
+  );
+
+  const resetGuess = useCallback(() => {
+    setGuessMap((previous) => {
+      if (previous[activeGuessKey] === undefined) return previous;
+      const next = { ...previous };
+      delete next[activeGuessKey];
+      return next;
+    });
+  }, [activeGuessKey]);
+
+  const handlePlayerNameCommit = useCallback(() => {
+    const value = playerNameDraft ?? identity.playerName;
+    const trimmed = value.trim().slice(0, 24);
+    if (!trimmed) return;
+    updatePlayerName(trimmed);
+    if (phase === "lobby") {
+      moves.setPlayerName?.(trimmed);
+    }
+    setPlayerNameDraft(null);
+  }, [identity.playerName, moves, phase, playerNameDraft, updatePlayerName]);
+
+  const handleSubmitGuess = useCallback(() => {
     const trimmed = guess.trim();
     if (!canSubmitGuess || !trimmed) return;
     moves.submitGuess?.(trimmed);
-    setGuess("");
-  };
+    resetGuess();
+  }, [canSubmitGuess, guess, moves, resetGuess]);
 
-  const handleNextRound = () => {
+  const handleContinueReveal = useCallback(() => {
+    if (!isHost) return;
+    moves.continueReveal?.();
+  }, [isHost, moves]);
+
+  const handleNextRound = useCallback(() => {
     moves.nextRound?.();
-    setThemeDraft("");
-    setSelectedVideo(null);
-    setCustomTitle("");
-    setGuess("");
-  };
+    setGuessMap({});
+  }, [moves]);
 
-  const handleRestartLobby = () => {
+  const handleRestartLobby = useCallback(() => {
     moves.restartLobby?.();
-    setThemeDraft("");
-    setSelectedVideo(null);
-    setCustomTitle("");
-    setGuess("");
-  };
+    setGuessMap({});
+  }, [moves]);
 
-  const handleEndGame = () => {
+  const handleEndGame = useCallback(() => {
     moves.endGame?.();
-  };
+  }, [moves]);
 
-  const previewSettings = (patch: Partial<Settings>) => {
-    if (!isHost) return;
-    setLocalSettings((previous) => ({ ...previous, ...patch }));
-  };
+  const previewSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      if (!isHost) return;
+      setLocalSettings((previous) => ({ ...previous, ...patch }));
+    },
+    [isHost],
+  );
 
-  const commitSettings = (patch: Partial<Settings>) => {
-    if (!isHost) return;
-    setLocalSettings((previous) => ({ ...previous, ...patch }));
+  const commitSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      if (!isHost) return;
+      setLocalSettings((previous) => ({ ...previous, ...patch }));
 
-    const diffEntries = Object.entries(patch).filter(([key, value]) => {
-      const typedKey = key as keyof Settings;
-      return value !== undefined && settings[typedKey] !== value;
-    });
+      const diffEntries = Object.entries(patch).filter(([key, value]) => {
+        const typedKey = key as keyof Settings;
+        return value !== undefined && settings[typedKey] !== value;
+      });
 
-    if (!diffEntries.length) return;
-    moves.updateSettings?.(Object.fromEntries(diffEntries) as Partial<Settings>);
-  };
+      if (!diffEntries.length) return;
+      moves.updateSettings?.(Object.fromEntries(diffEntries) as Partial<Settings>);
+    },
+    [isHost, moves, settings],
+  );
 
   const handleCopyCode = async () => {
     try {
@@ -644,8 +1115,8 @@ export default function GameBoard({
                     <Input
                       id="player-name"
                       placeholder="Your name"
-                      value={playerNameInput}
-                      onChange={(event) => setPlayerNameInput(event.target.value)}
+                      value={playerNameDraft ?? identity.playerName}
+                      onChange={(event) => setPlayerNameDraft(event.target.value)}
                       onBlur={handlePlayerNameCommit}
                       onKeyDown={(event) => event.key === "Enter" && handlePlayerNameCommit()}
                       data-testid="input-player-name"
@@ -663,6 +1134,11 @@ export default function GameBoard({
                   >
                     Start Game
                   </Button>
+                  {identity.role === "spectator" && (
+                    <p className="text-center text-xs text-muted-foreground">
+                      Lobby is full. We&apos;ll seat you automatically when a spot opens.
+                    </p>
+                  )}
                   {(!isHost || connectedCount < 2) && (
                     <p className="text-center text-xs text-muted-foreground">
                       {isHost
@@ -744,7 +1220,7 @@ export default function GameBoard({
                   id="theme"
                   placeholder="e.g., 80s Rock, Movie Soundtracks, Summer Vibes..."
                   value={themeValue}
-                  onChange={(event) => handleThemeChange(event.target.value)}
+                  onChange={(event) => isHost && moves.setTheme?.(event.target.value)}
                   className="text-lg mt-2"
                   data-testid="input-theme"
                   disabled={!isHost}
@@ -804,191 +1280,20 @@ export default function GameBoard({
 
   if (phase === "song_picking") {
     return (
-      <div className="min-h-screen bg-background">
-        {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-4xl">
-          <div className="space-y-6">
-            <Card className="bg-primary/10 border-primary">
-              <CardHeader>
-                <CardTitle className="font-heading text-2xl mb-1">Pick Your Song</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Theme:{" "}
-                  <span className="font-semibold text-foreground">
-                    {currentRound?.theme ?? "Pending"}
-                  </span>
-                </p>
-              </CardHeader>
-            </Card>
-
-            {!mySelection && (
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-                <Card className="lg:col-span-1">
-                  <CardHeader>
-                    <CardTitle className="font-heading">Search YouTube</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <YouTubeSearch
-                      onSelect={handleVideoSelect}
-                      selectedVideoId={selectedVideo?.id}
-                    />
-                  </CardContent>
-                </Card>
-
-                <Card className="self-start">
-                  <CardHeader>
-                    <CardTitle className="font-heading">Selected Song</CardTitle>
-                    <CardDescription>Fine-tune the title before locking it in.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {selectedVideo ? (
-                      <div className="space-y-4">
-                        <div className="overflow-hidden rounded-lg border">
-                          <YouTubePlayer
-                            videoId={selectedVideo.id}
-                            autoplay={false}
-                            startSeconds={startSeconds}
-                            interactive
-                            onReady={handlePreviewReady}
-                            onEnd={handlePreviewEnd}
-                          />
-                        </div>
-                        <div className="space-y-3">
-                          <div>
-                            <Label htmlFor="song-title">Song title to guess</Label>
-                            <Input
-                              id="song-title"
-                              value={customTitle}
-                              onChange={(event) => setCustomTitle(event.target.value)}
-                              className="mt-2"
-                              placeholder="Edit the title if needed..."
-                              data-testid="input-song-title"
-                            />
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              This is what other players will try to guess.
-                            </p>
-                          </div>
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label htmlFor="start-seconds">Start playback at</Label>
-                              <span className="text-xs text-muted-foreground">
-                                {formatSeconds(startSeconds)}
-                              </span>
-                            </div>
-                            <Slider
-                              id="start-seconds"
-                              min={0}
-                              max={maxStartSeconds}
-                              step={1}
-                              value={toSliderValue(startSeconds)}
-                              onValueChange={(values) => {
-                                const value = clampStartSeconds(values[0] ?? 0, maxStartSeconds);
-                                setStartSeconds(value);
-                                previewPlayerRef.current?.seekTo?.(value, true);
-                              }}
-                              data-testid="slider-start-seconds"
-                            />
-                            <div className="flex items-center gap-2">
-                              <Input
-                                type="number"
-                                min={0}
-                                max={maxStartSeconds}
-                                value={startSeconds}
-                                onChange={(event: ChangeEvent<HTMLInputElement>) => {
-                                  const next = clampStartSeconds(
-                                    Number(event.target.value),
-                                    maxStartSeconds,
-                                  );
-                                  setStartSeconds(next);
-                                  previewPlayerRef.current?.seekTo?.(next, true);
-                                }}
-                                className="w-24"
-                                data-testid="input-start-seconds"
-                              />
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={togglePreview}
-                                disabled={!previewPlayerRef.current}
-                                data-testid="button-preview"
-                              >
-                                {previewing ? (
-                                  <>
-                                    <Pause className="mr-2 h-4 w-4" /> Pause Preview
-                                  </>
-                                ) : (
-                                  <>
-                                    <Play className="mr-2 h-4 w-4" /> Play Preview
-                                  </>
-                                )}
-                              </Button>
-                            </div>
-                          </div>
-                          <Button
-                            onClick={handleConfirmSong}
-                            className="w-full"
-                            disabled={!customTitle.trim()}
-                            data-testid="button-confirm-song"
-                          >
-                            Confirm Selection
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex min-h-[220px] items-center justify-center text-center text-sm text-muted-foreground">
-                        Choose a song from the search results to review its details here.
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {mySelection && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="font-heading">You are all set!</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                    {mySelection.thumbnail ? (
-                      <div className="relative w-full max-w-[200px] overflow-hidden rounded-lg border bg-muted sm:w-48">
-                        <img
-                          src={mySelection.thumbnail}
-                          alt={mySelection.customTitle || mySelection.originalTitle}
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    ) : null}
-                    <div className="space-y-1">
-                      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        Selected song
-                      </span>
-                      <div className="text-lg font-semibold leading-snug">
-                        {mySelection.customTitle || mySelection.originalTitle}
-                      </div>
-                      {(mySelection.startSeconds ?? 0) > 0 && (
-                        <div className="text-sm text-muted-foreground">
-                          Starts at {formatSeconds(mySelection.startSeconds ?? 0)}
-                        </div>
-                      )}
-                      {mySelection.customTitle &&
-                        mySelection.originalTitle &&
-                        mySelection.customTitle.trim() !== mySelection.originalTitle.trim() && (
-                          <div className="text-sm text-muted-foreground">
-                            Original title: {mySelection.originalTitle}
-                          </div>
-                        )}
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground" data-testid="text-waiting-selection">
-                    Waiting for other players to finish picking.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-      </div>
+      <SongPickingSection
+        headerControls={headerControls}
+        currentRound={currentRound}
+        settings={settings}
+        themeValue={themeValue}
+        isHost={isHost}
+        handleThemeChange={handleThemeChange}
+        handleRandomTheme={handleRandomTheme}
+        mySelection={mySelection}
+        moves={moves}
+        effectivePlayerId={effectivePlayerId}
+        playerLookup={playersById}
+        toast={toast}
+      />
     );
   }
 
@@ -1095,62 +1400,7 @@ export default function GameBoard({
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden px-0 pb-0">
-                {currentSongGuessLog.length === 0 ? (
-                  <div className="flex h-full items-center justify-center px-6 py-12">
-                    <p className="text-center text-sm text-muted-foreground">
-                      No guesses yet for this song.
-                    </p>
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[360px] px-6 pb-6">
-                    <div className="space-y-4">
-                      {currentSongGuessLog.map((entry) => {
-                        const isSelf = effectivePlayerId && entry.playerId === effectivePlayerId;
-                        return (
-                          <div
-                            key={entry.id}
-                            className={cn(
-                              "flex flex-col gap-2",
-                              isSelf ? "items-end" : "items-start",
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                "flex items-start gap-3",
-                                isSelf ? "flex-row-reverse" : "flex-row",
-                              )}
-                            >
-                              <PlayerAvatar
-                                playerId={entry.playerId}
-                                playerName={entry.playerName}
-                                size="sm"
-                              />
-                              <div className={cn("space-y-1", isSelf ? "text-right" : "text-left")}>
-                                <div className="flex items-center gap-2 text-sm font-medium">
-                                  <span>{isSelf ? "You" : entry.playerName}</span>
-                                  {entry.isCorrect && <Badge>Correct</Badge>}
-                                </div>
-                                <div
-                                  className={cn(
-                                    "max-w-xs rounded-md px-3 py-2 text-sm",
-                                    isSelf
-                                      ? "bg-primary text-primary-foreground"
-                                      : "bg-muted/40 text-muted-foreground",
-                                  )}
-                                >
-                                  "{entry.guess}"
-                                </div>
-                              </div>
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {formatGuessTime(entry.time)}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </ScrollArea>
-                )}
+                {renderGuessLogBody(activeSongGuessLog)}
               </CardContent>
               <div className="border-t bg-muted/20 p-6">
                 <div className="flex flex-col gap-3">
@@ -1158,7 +1408,7 @@ export default function GameBoard({
                     <Input
                       placeholder={guessPlaceholder}
                       value={guess}
-                      onChange={(event) => setGuess(event.target.value)}
+                      onChange={(event) => updateGuess(event.target.value)}
                       onKeyDown={(event) => event.key === "Enter" && handleSubmitGuess()}
                       className="text-lg"
                       data-testid="input-guess"
@@ -1189,6 +1439,121 @@ export default function GameBoard({
                   )}
                 </div>
               </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "song_reveal" && revealSong && revealSongOwnerId !== null) {
+    const owner = players.find((player) => player.id === revealSongOwnerId);
+    const timerProgress =
+      activeSongIndex !== null && activeSongIndex !== undefined && revealSong ? 1 : undefined;
+
+    return (
+      <div className="min-h-screen bg-background">
+        {headerControls}
+        <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+          <Card className="bg-secondary/10 border-secondary">
+            <CardHeader>
+              <div className="flex flex-col gap-2 text-center">
+                <CardTitle className="font-heading text-3xl">Song Revealed!</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {owner?.name ?? "Mystery player"}'s selection has been uncovered.
+                </p>
+              </div>
+            </CardHeader>
+          </Card>
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-0">
+                <CardTitle className="font-heading text-lg">Now Revealed</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-4 space-y-4">
+                <div className="rounded-lg border bg-muted/30 p-2">
+                  <YouTubePlayer
+                    videoId={revealSong.videoId}
+                    autoplay={false}
+                    startSeconds={revealSong.startSeconds ?? 0}
+                    timerProgress={timerProgress}
+                    interactive
+                  />
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Song Title
+                    </span>
+                    <h2 className="text-xl font-bold leading-tight">
+                      {revealSong.customTitle || revealSong.originalTitle}
+                    </h2>
+                  </div>
+                  {revealSong.thumbnail && (
+                    <div className="relative w-full overflow-hidden rounded-lg border bg-muted">
+                      <img
+                        src={revealSong.thumbnail}
+                        alt={revealSong.customTitle || revealSong.originalTitle}
+                        className="w-full object-cover"
+                      />
+                    </div>
+                  )}
+                  {(revealSong.startSeconds ?? 0) > 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      Playback started at {formatSeconds(revealSong.startSeconds ?? 0)}.
+                    </p>
+                  )}
+                  {revealSong.customTitle &&
+                    revealSong.originalTitle &&
+                    revealSong.customTitle.trim() !== revealSong.originalTitle.trim() && (
+                      <p className="text-sm text-muted-foreground">
+                        Original title: {revealSong.originalTitle}
+                      </p>
+                    )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="flex min-h-[520px] flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 font-heading text-lg">
+                  <MessageSquare className="h-4 w-4" /> Guess Log
+                </CardTitle>
+                <CardDescription>How everyone fared on this song.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden px-0 pb-0">
+                {renderGuessLogBody(activeSongGuessLog)}
+              </CardContent>
+              <div className="border-t bg-muted/20 p-6">
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  {owner ? (
+                    <p>
+                      This song was selected by <span className="font-semibold">{owner.name}</span>.
+                    </p>
+                  ) : (
+                    <p>The song owner's identity could not be determined.</p>
+                  )}
+                  <p>
+                    {activeSongGuessLog.filter((entry) => entry.isCorrect).length} player
+                    {activeSongGuessLog.filter((entry) => entry.isCorrect).length === 1 ? "" : "s"}{" "}
+                    guessed correctly.
+                  </p>
+                </div>
+              </div>
+              {isHost && (
+                <div className="border-t bg-muted/30 p-6">
+                  <Button
+                    onClick={handleContinueReveal}
+                    className="w-full"
+                    size="lg"
+                    data-testid="button-continue-reveal"
+                  >
+                    Continue
+                  </Button>
+                </div>
+              )}
             </Card>
           </div>
         </div>
@@ -1280,12 +1645,13 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
-                      ? "bg-primary/20 border-2 border-primary"
-                      : index === 1
-                        ? "bg-secondary/20 border-2 border-secondary"
-                        : "bg-muted/50"
-                      }`}
+                    className={`flex items-center gap-4 p-6 rounded-lg ${
+                      index === 0
+                        ? "bg-primary/20 border-2 border-primary"
+                        : index === 1
+                          ? "bg-secondary/20 border-2 border-secondary"
+                          : "bg-muted/50"
+                    }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">

@@ -1,10 +1,15 @@
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
+export interface TestPlayerHandle {
+  name: string;
+  context: BrowserContext;
+  page: Page;
+}
+
 export interface MatchHandles {
-  hostContext: BrowserContext;
-  peerContext: BrowserContext;
-  hostPage: Page;
-  peerPage: Page;
+  host: TestPlayerHandle;
+  peers: TestPlayerHandle[];
+  allPlayers: TestPlayerHandle[];
   roomCode: string;
   cleanup: () => Promise<void>;
 }
@@ -24,18 +29,38 @@ export const TEST_YOUTUBE_RESULTS = [
     channelTitle: "Rick Astley",
     thumbnail: "https://i.ytimg.com/vi/yPYZpwSpKmA/default.jpg",
   },
+  {
+    id: "3JZ_D3ELwOQ",
+    title: "Take On Me",
+    channelTitle: "a-ha",
+    thumbnail: "https://i.ytimg.com/vi/3JZ_D3ELwOQ/default.jpg",
+  },
+  {
+    id: "fLexgOxsZu0",
+    title: "Hungry Like the Wolf",
+    channelTitle: "Duran Duran",
+    thumbnail: "https://i.ytimg.com/vi/fLexgOxsZu0/default.jpg",
+  },
 ];
 
-export async function createHostAndPeerMatch(
+export async function createMatchWithPlayers(
   browser: Browser,
-  baseURL: string = DEFAULT_BASE_URL,
+  options?: { baseURL?: string; playerNames?: string[] },
 ): Promise<MatchHandles> {
-  const hostContext = await browser.newContext({ baseURL });
-  const peerContext = await browser.newContext({ baseURL });
+  const baseURL = options?.baseURL ?? DEFAULT_BASE_URL;
+  const playerNames = options?.playerNames ?? ["Host Player", "Peer One", "Peer Two", "Peer Three"];
 
+  if (playerNames.length < 2) {
+    throw new Error("Need at least two players in the lobby");
+  }
+
+  const contexts: BrowserContext[] = [];
+
+  const hostContext = await browser.newContext({ baseURL });
+  contexts.push(hostContext);
   const hostPage = await hostContext.newPage();
   await hostPage.goto("/");
-  await hostPage.getByTestId("input-player-name").fill("Host Player");
+  await hostPage.getByTestId("input-player-name").fill(playerNames[0]);
   await hostPage.getByTestId("button-create-room").click();
   await hostPage.waitForURL("**/game/*", { timeout: 20000 });
   const roomCode = (await hostPage.getByTestId("text-room-code").textContent())?.trim() ?? "";
@@ -43,23 +68,53 @@ export async function createHostAndPeerMatch(
     throw new Error("Failed to read generated room code");
   }
 
-  const peerPage = await peerContext.newPage();
-  await peerPage.goto("/");
-  await peerPage.getByTestId("input-player-name").fill("Peer Player");
-  await peerPage.getByTestId("input-room-code").fill(roomCode);
-  await peerPage.getByTestId("button-join-room").click();
-  await peerPage.waitForURL(`**/game/${roomCode}`, { timeout: 20000 });
+  const players: TestPlayerHandle[] = [
+    {
+      name: playerNames[0],
+      context: hostContext,
+      page: hostPage,
+    },
+  ];
 
-  await expect(hostPage.getByText(new RegExp(`Players \\(2/\\d+\\)`))).toBeVisible({ timeout: 20000 });
+  for (let index = 1; index < playerNames.length; index += 1) {
+    const context = await browser.newContext({ baseURL });
+    contexts.push(context);
+    await context.addInitScript(
+      ({ playerName }) => {
+        window.localStorage.setItem("playerName", playerName);
+        window.sessionStorage.setItem("musicshowdown.pendingRole", "peer");
+        window.sessionStorage.setItem("musicshowdown.lastRole", "peer");
+      },
+      {
+        playerName: playerNames[index],
+      },
+    );
+    const page = await context.newPage();
+    await page.goto("/");
+    await page.getByTestId("input-player-name").fill(playerNames[index]);
+    await page.getByTestId("input-room-code").fill(roomCode);
+    await page.getByTestId("button-join-room").click();
+
+    await page.waitForURL(`**/game/${roomCode}`, { timeout: 20000 });
+
+    const playersCounter = await expect(hostPage.getByText(`Players (${index + 1}/8)`)).toBeVisible(
+      { timeout: 20000 },
+    );
+
+    players.push({
+      name: playerNames[index],
+      context,
+      page,
+    });
+  }
 
   return {
-    hostContext,
-    peerContext,
-    hostPage,
-    peerPage,
+    host: players[0],
+    peers: players.slice(1),
+    allPlayers: players,
     roomCode,
     cleanup: async () => {
-      await Promise.allSettled([hostContext.close(), peerContext.close()]);
+      await Promise.allSettled(contexts.map((context) => context.close()));
     },
   };
 }
