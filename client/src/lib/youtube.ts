@@ -1,5 +1,6 @@
 import type { YouTubeVideo } from "@/schema";
 import { getYouTubeApiKey } from "./getYouTubeApiKey";
+import { decodeHtmlEntities } from "./utils";
 
 // Client-side YouTube Data API v3 integration
 let cachedApiKey: string | null = null;
@@ -38,9 +39,9 @@ export async function searchYouTube(query: string): Promise<YouTubeVideo[]> {
   return (
     data.items?.map((item: any) => ({
       id: item.id?.videoId || "",
-      title: item.snippet?.title || "",
+      title: decodeHtmlEntities(item.snippet?.title || ""),
       thumbnail: item.snippet?.thumbnails?.medium?.url || "",
-      channelTitle: item.snippet?.channelTitle || "",
+      channelTitle: decodeHtmlEntities(item.snippet?.channelTitle || ""),
     })) || []
   );
 }

@@ -33,6 +33,16 @@ export function YouTubePlayer({
   const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
 
+  let overlayOpacity = 1;
+  if (timerProgress !== undefined) {
+    const clampedProgress = Math.min(Math.max(timerProgress, 0), 1);
+    if (clampedProgress >= 0.5) {
+      const secondHalfProgress = (clampedProgress - 0.5) / 0.5;
+      overlayOpacity = 1 - 0.15 * secondHalfProgress;
+    }
+    overlayOpacity = Math.max(0.85, overlayOpacity);
+  }
+
   useEffect(() => {
     // Load YouTube IFrame API
     if (!window.YT) {
@@ -99,14 +109,14 @@ export function YouTubePlayer({
         className={interactive ? "w-full h-full" : "pointer-events-none w-full h-full"}
         data-testid="youtube-player"
       />
-      <div
+      {!interactive && <div
         className="pointer-events-none absolute left-0 right-0 top-0"
-        style={{ height: "200px", backgroundColor: "black" }}
-      />
-      {timerProgress !== undefined && (
+        style={{ height: "60px", backgroundColor: "black" }}
+      />}
+      {timerProgress !== undefined && !interactive && (
         <div
           className="pointer-events-none absolute inset-0 rounded-lg"
-          style={{ backgroundColor: `rgba(0,0,0,${1 - 0.75 * timerProgress})` }}
+          style={{ backgroundColor: `rgba(0,0,0,${overlayOpacity})` }}
         />
       )}
     </div>

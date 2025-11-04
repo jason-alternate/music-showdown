@@ -149,8 +149,6 @@ function SongPickingSection({
   const [customTitle, setCustomTitle] = useState("");
   const [startSeconds, setStartSeconds] = useState(0);
   const [previewing, setPreviewing] = useState(false);
-  const [isVideoHidden, setIsVideoHidden] = useState(false);
-  const [includeThumbnail, setIncludeThumbnail] = useState(true);
   const previewPlayerRef = useRef<any>(null);
   const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
     computeMaxStartSeconds(null, settings.playbackDuration),
@@ -187,8 +185,6 @@ function SongPickingSection({
       setCustomTitle(decodeHtmlEntities(video.title));
       setStartSeconds(0);
       setPreviewing(false);
-      setIsVideoHidden(false);
-      setIncludeThumbnail(true);
       previewPlayerRef.current = null;
       setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
     },
@@ -222,7 +218,7 @@ function SongPickingSection({
       videoId: selectedVideo.id,
       originalTitle: selectedVideo.title,
       customTitle: decodeHtmlEntities(customTitle),
-      thumbnail: includeThumbnail ? selectedVideo.thumbnail : "",
+      thumbnail: selectedVideo.thumbnail,
       startSeconds,
     });
     toast({ title: "Song selected", description: "Waiting for other players..." });
@@ -230,8 +226,6 @@ function SongPickingSection({
     setCustomTitle("");
     setStartSeconds(0);
     setPreviewing(false);
-    setIsVideoHidden(false);
-    setIncludeThumbnail(true);
     previewPlayerRef.current = null;
     setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
   }, [
@@ -337,26 +331,7 @@ function SongPickingSection({
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-sm font-medium text-muted-foreground">Preview</span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIsVideoHidden((previous) => !previous)}
-                            data-testid="button-toggle-preview-visibility"
-                            aria-pressed={isVideoHidden}
-                          >
-                            {isVideoHidden ? (
-                              <>
-                                <Eye className="mr-2 h-4 w-4" />
-                                Show Video
-                              </>
-                            ) : (
-                              <>
-                                <EyeOff className="mr-2 h-4 w-4" />
-                                Hide Video
-                              </>
-                            )}
-                          </Button>
+
                         </div>
                         <div className="relative overflow-hidden rounded-lg border">
                           <YouTubePlayer
@@ -367,41 +342,7 @@ function SongPickingSection({
                             onReady={handlePreviewReady}
                             onEnd={handlePreviewEnd}
                           />
-                          {isVideoHidden && (
-                            <div className="pointer-events-none absolute inset-0 z-10 rounded-lg bg-black" />
-                          )}
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Thumbnail visibility
-                          </span>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setIncludeThumbnail((previous) => !previous)}
-                            data-testid="button-toggle-thumbnail-visibility"
-                            aria-pressed={includeThumbnail}
-                          >
-                            {includeThumbnail ? (
-                              <>
-                                <ImageOff className="mr-2 h-4 w-4" />
-                                Hide Thumbnail
-                              </>
-                            ) : (
-                              <>
-                                <Image className="mr-2 h-4 w-4" />
-                                Show Thumbnail
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Decide whether other players see this video\'s thumbnail once you lock it
-                          in.
-                        </p>
                       </div>
                       <div className="space-y-3">
                         <div>
@@ -1462,15 +1403,15 @@ export default function GameBoard({
 
   if (phase === "guessing" && currentSong) {
     const activeSongTitle = (currentSong.customTitle || currentSong.originalTitle || "").trim();
-    const characterCountHint = activeSongTitle ? activeSongTitle.replace(/\s+/g, "").length : 0;
     const hangmanHint = activeSongTitle
       ? Array.from(activeSongTitle)
         .map((char) => (/\s/.test(char) ? " " : "_"))
-        .join(" ")
+        .join("")
       : "";
 
     const timerProgress =
       settings.playbackDuration > 0 ? 1 - timeRemaining / settings.playbackDuration : 0;
+
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
@@ -1567,9 +1508,6 @@ export default function GameBoard({
                     <div className="font-mono text-lg uppercase tracking-[0.35em] text-muted-foreground">
                       {hangmanHint}
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      Characters (excluding spaces): {characterCountHint}
-                    </p>
                   </div>
                 )}
               </CardHeader>
@@ -1824,10 +1762,10 @@ export default function GameBoard({
                   <div
                     key={player.id}
                     className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
-                        ? "bg-primary/20 border-2 border-primary"
-                        : index === 1
-                          ? "bg-secondary/20 border-2 border-secondary"
-                          : "bg-muted/50"
+                      ? "bg-primary/20 border-2 border-primary"
+                      : index === 1
+                        ? "bg-secondary/20 border-2 border-secondary"
+                        : "bg-muted/50"
                       }`}
                     data-testid={`final-player-${player.id}`}
                   >
