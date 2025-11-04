@@ -54,7 +54,7 @@ import type { BoardIdentityHelpers } from "@/game/GameClient";
 import { SPECTATOR_PLAYER_ID } from "@/game/identity";
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
 
 type Settings = GameState["settings"];
 
@@ -399,7 +399,8 @@ function SongPickingSection({
                           </Button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Decide whether other players see this video\'s thumbnail once you lock it in.
+                          Decide whether other players see this video\'s thumbnail once you lock it
+                          in.
                         </p>
                       </div>
                       <div className="space-y-3">
@@ -720,11 +721,11 @@ export default function GameBoard({
 
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-      currentSongOwnerId &&
-      effectivePlayerId &&
-      currentSongOwnerId !== effectivePlayerId &&
-      !hasCorrectGuess &&
-      (rawTimer === null || rawTimer > 0),
+    currentSongOwnerId &&
+    effectivePlayerId &&
+    currentSongOwnerId !== effectivePlayerId &&
+    !hasCorrectGuess &&
+    (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -1464,8 +1465,8 @@ export default function GameBoard({
     const characterCountHint = activeSongTitle ? activeSongTitle.replace(/\s+/g, "").length : 0;
     const hangmanHint = activeSongTitle
       ? Array.from(activeSongTitle)
-          .map((char) => (/\s/.test(char) ? " " : "_"))
-          .join(" ")
+        .map((char) => (/\s/.test(char) ? " " : "_"))
+        .join(" ")
       : "";
 
     const timerProgress =
@@ -1822,13 +1823,12 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${
-                      index === 0
+                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
                         ? "bg-primary/20 border-2 border-primary"
                         : index === 1
                           ? "bg-secondary/20 border-2 border-secondary"
                           : "bg-muted/50"
-                    }`}
+                      }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">
