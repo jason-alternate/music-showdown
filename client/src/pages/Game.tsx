@@ -23,6 +23,7 @@ import { YouTubePlayer } from "@/components/YouTubePlayer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { playCorrectGuessSound } from "@/lib/audio";
 import type {
   GameState,
   Player,
@@ -513,6 +514,7 @@ export default function GameBoard({
   const [guessMap, setGuessMap] = useState<Record<string, string>>({});
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
   const [copied, setCopied] = useState(false);
+  const correctGuessCountRef = useRef(0);
 
   const syncLocalSettingsFromGame = useCallback(() => {
     setLocalSettings(settings);
@@ -822,6 +824,7 @@ export default function GameBoard({
         <div className="space-y-4">
           {entries.map((entry) => {
             const isSelf = effectivePlayerId && entry.playerId === effectivePlayerId;
+            const shouldHideGuess = entry.isCorrect && !isSelf;
             return (
               <div
                 key={entry.id}
@@ -844,7 +847,13 @@ export default function GameBoard({
                           : "bg-muted/40 text-muted-foreground",
                       )}
                     >
-                      "{entry.guess}"
+                      {shouldHideGuess ? (
+                        <span className="italic">Correct guess locked in</span>
+                      ) : (
+                        <>
+                          &quot;{entry.guess}&quot;
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -917,6 +926,20 @@ export default function GameBoard({
     moves.submitGuess?.(trimmed);
     resetGuess();
   }, [canSubmitGuess, guess, moves, resetGuess]);
+
+  useEffect(() => {
+    correctGuessCountRef.current = 0;
+  }, [activeGuessKey]);
+
+  useEffect(() => {
+    if (!effectivePlayerId) return;
+    const guessList = guesses[effectivePlayerId] ?? [];
+    const correctCount = guessList.filter((entry) => entry.isCorrect).length;
+    if (correctCount > correctGuessCountRef.current) {
+      playCorrectGuessSound();
+    }
+    correctGuessCountRef.current = correctCount;
+  }, [effectivePlayerId, guesses]);
 
   const handleContinueReveal = useCallback(() => {
     if (!isHost) return;
@@ -1305,6 +1328,9 @@ export default function GameBoard({
       : "Type your guess...";
 
   if (phase === "guessing" && currentSong) {
+    const activeSongTitle = (currentSong.customTitle || currentSong.originalTitle || "").trim();
+    const characterCountHint = activeSongTitle ? activeSongTitle.replace(/\s+/g, "").length : 0;
+
     const timerProgress =
       settings.playbackDuration > 0 ? 1 - timeRemaining / settings.playbackDuration : 0;
     return (
@@ -1409,7 +1435,11 @@ export default function GameBoard({
                       placeholder={guessPlaceholder}
                       value={guess}
                       onChange={(event) => updateGuess(event.target.value)}
-                      onKeyDown={(event) => event.key === "Enter" && handleSubmitGuess()}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
+                        event.preventDefault();
+                        handleSubmitGuess();
+                      }}
                       className="text-lg"
                       data-testid="input-guess"
                       disabled={!canSubmitGuess}
@@ -1429,6 +1459,11 @@ export default function GameBoard({
                   {!canSubmitGuess && hasCorrectGuess && (
                     <p className="text-sm text-muted-foreground">
                       Great job! You'll rejoin next round.
+                    </p>
+                  )}
+                  {characterCountHint > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Character count hint (excluding spaces): {characterCountHint}
                     </p>
                   )}
                   {lastMyGuess && !hasCorrectGuess && (

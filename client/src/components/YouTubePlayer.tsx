@@ -99,6 +99,10 @@ export function YouTubePlayer({
         className={interactive ? "w-full h-full" : "pointer-events-none w-full h-full"}
         data-testid="youtube-player"
       />
+      <div
+        className="pointer-events-none absolute left-0 right-0 top-0"
+        style={{ height: "200px", backgroundColor: "black" }}
+      />
       {timerProgress !== undefined && (
         <div
           className="pointer-events-none absolute inset-0 rounded-lg"
