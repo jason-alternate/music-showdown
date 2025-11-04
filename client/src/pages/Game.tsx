@@ -50,7 +50,7 @@ import type { BoardIdentityHelpers } from "@/game/GameClient";
 import { SPECTATOR_PLAYER_ID } from "@/game/identity";
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
 
 type Settings = GameState["settings"];
 
@@ -149,6 +149,10 @@ function SongPickingSection({
   const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
     computeMaxStartSeconds(null, settings.playbackDuration),
   );
+  const songSelections = currentRound?.songSelections ?? {};
+  const connectedPlayers = useMemo(() => {
+    return Array.from(playerLookup.values()).filter((player) => player.connected);
+  }, [playerLookup]);
 
   const updatePlaybackBounds = useCallback(() => {
     const duration = previewPlayerRef.current?.getDuration?.();
@@ -450,37 +454,74 @@ function SongPickingSection({
                 <p className="text-sm text-muted-foreground" data-testid="text-waiting-selection">
                   Waiting for other players to finish picking.
                 </p>
+                {connectedPlayers.length > 0 && (
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-foreground">Player lock-in status</p>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {connectedPlayers.map((player) => {
+                        const isLockedIn = Boolean(songSelections[player.id]);
+                        const displayName = player.name?.trim() || `Player ${player.id}`;
+                        return (
+                          <div
+                            key={player.id}
+                            className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
+                            data-testid={`player-lock-status-${player.id}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <PlayerAvatar playerId={player.id} playerName={player.name} size="sm" />
+                              <span className="text-sm font-medium text-foreground">{displayName}</span>
+                            </div>
+                            {isLockedIn ? (
+                              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                                <CheckCircle className="h-3 w-3" />
+                                Locked In
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                                <Circle className="h-3 w-3" />
+                                Waiting
+                              </Badge>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">Need inspiration? Pick a suggestion.</p>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRandomTheme}
-              disabled={!isHost}
-              data-testid="button-random-theme"
-            >
-              Surprise Me
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {THEME_SUGGESTIONS.map((suggestion) => (
-              <Button
-                key={suggestion}
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => handleThemeChange(suggestion)}
-                disabled={!isHost}
-                className="whitespace-nowrap"
-              >
-                {suggestion}
-              </Button>
-            ))}
-          </div>
+          {!mySelection && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-muted-foreground">Need inspiration? Pick a suggestion.</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRandomTheme}
+                  disabled={!isHost}
+                  data-testid="button-random-theme"
+                >
+                  Surprise Me
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {THEME_SUGGESTIONS.map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleThemeChange(suggestion)}
+                    disabled={!isHost}
+                    className="whitespace-nowrap"
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -588,11 +629,11 @@ export default function GameBoard({
 
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-      currentSongOwnerId &&
-      effectivePlayerId &&
-      currentSongOwnerId !== effectivePlayerId &&
-      !hasCorrectGuess &&
-      (rawTimer === null || rawTimer > 0),
+    currentSongOwnerId &&
+    effectivePlayerId &&
+    currentSongOwnerId !== effectivePlayerId &&
+    !hasCorrectGuess &&
+    (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -850,9 +891,7 @@ export default function GameBoard({
                       {shouldHideGuess ? (
                         <span className="italic">Correct guess locked in</span>
                       ) : (
-                        <>
-                          &quot;{entry.guess}&quot;
-                        </>
+                        <>&quot;{entry.guess}&quot;</>
                       )}
                     </div>
                   </div>
@@ -1680,13 +1719,12 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${
-                      index === 0
+                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
                         ? "bg-primary/20 border-2 border-primary"
                         : index === 1
                           ? "bg-secondary/20 border-2 border-secondary"
                           : "bg-muted/50"
-                    }`}
+                      }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">
