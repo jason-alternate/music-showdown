@@ -21,7 +21,7 @@ import { Timer } from "@/components/Timer";
 import { YouTubeSearch } from "@/components/YouTubeSearch";
 import { YouTubePlayer } from "@/components/YouTubePlayer";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
+import { cn, decodeHtmlEntities } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { playCorrectGuessSound } from "@/lib/audio";
 import type {
@@ -45,12 +45,14 @@ import {
   Loader2,
   Play,
   Pause,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 import { SPECTATOR_PLAYER_ID } from "@/game/identity";
 import { MAX_PLAYERS } from "@/game/MusicShowdownGame";
 
-interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers { }
+interface GameBoardProps extends BoardProps<GameState>, BoardIdentityHelpers {}
 
 type Settings = GameState["settings"];
 
@@ -145,10 +147,12 @@ function SongPickingSection({
   const [customTitle, setCustomTitle] = useState("");
   const [startSeconds, setStartSeconds] = useState(0);
   const [previewing, setPreviewing] = useState(false);
+  const [isVideoHidden, setIsVideoHidden] = useState(false);
   const previewPlayerRef = useRef<any>(null);
   const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
     computeMaxStartSeconds(null, settings.playbackDuration),
   );
+  const themeSelected = themeValue.trim().length > 0;
   const songSelections = currentRound?.songSelections ?? {};
   const connectedPlayers = useMemo(() => {
     return Array.from(playerLookup.values()).filter((player) => player.connected);
@@ -177,9 +181,10 @@ function SongPickingSection({
   const handleVideoSelect = useCallback(
     (video: YouTubeVideo) => {
       setSelectedVideo(video);
-      setCustomTitle(video.title);
+      setCustomTitle(decodeHtmlEntities(video.title));
       setStartSeconds(0);
       setPreviewing(false);
+      setIsVideoHidden(false);
       previewPlayerRef.current = null;
       setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
     },
@@ -212,7 +217,7 @@ function SongPickingSection({
     moves.selectSong?.({
       videoId: selectedVideo.id,
       originalTitle: selectedVideo.title,
-      customTitle: trimmed,
+      customTitle: decodeHtmlEntities(customTitle),
       thumbnail: selectedVideo.thumbnail,
       startSeconds,
     });
@@ -221,6 +226,7 @@ function SongPickingSection({
     setCustomTitle("");
     setStartSeconds(0);
     setPreviewing(false);
+    setIsVideoHidden(false);
     previewPlayerRef.current = null;
     setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
   }, [
@@ -313,15 +319,45 @@ function SongPickingSection({
                 <CardContent>
                   {selectedVideo ? (
                     <div className="space-y-4">
-                      <div className="overflow-hidden rounded-lg border">
-                        <YouTubePlayer
-                          videoId={selectedVideo.id}
-                          autoplay={false}
-                          startSeconds={startSeconds}
-                          interactive
-                          onReady={handlePreviewReady}
-                          onEnd={handlePreviewEnd}
-                        />
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Preview
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsVideoHidden((previous) => !previous)}
+                            data-testid="button-toggle-preview-visibility"
+                            aria-pressed={isVideoHidden}
+                          >
+                            {isVideoHidden ? (
+                              <>
+                                <Eye className="mr-2 h-4 w-4" />
+                                Show Video
+                              </>
+                            ) : (
+                              <>
+                                <EyeOff className="mr-2 h-4 w-4" />
+                                Hide Video
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <div className="relative overflow-hidden rounded-lg border">
+                          <YouTubePlayer
+                            videoId={selectedVideo.id}
+                            autoplay={false}
+                            startSeconds={startSeconds}
+                            interactive
+                            onReady={handlePreviewReady}
+                            onEnd={handlePreviewEnd}
+                          />
+                          {isVideoHidden && (
+                            <div className="pointer-events-none absolute inset-0 z-10 rounded-lg bg-black" />
+                          )}
+                        </div>
                       </div>
                       <div className="space-y-3">
                         <div>
@@ -468,11 +504,20 @@ function SongPickingSection({
                             data-testid={`player-lock-status-${player.id}`}
                           >
                             <div className="flex items-center gap-2">
-                              <PlayerAvatar playerId={player.id} playerName={player.name} size="sm" />
-                              <span className="text-sm font-medium text-foreground">{displayName}</span>
+                              <PlayerAvatar
+                                playerId={player.id}
+                                playerName={player.name}
+                                size="sm"
+                              />
+                              <span className="text-sm font-medium text-foreground">
+                                {displayName}
+                              </span>
                             </div>
                             {isLockedIn ? (
-                              <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                              <Badge
+                                variant="secondary"
+                                className="flex items-center gap-1 text-xs"
+                              >
                                 <CheckCircle className="h-3 w-3" />
                                 Locked In
                               </Badge>
@@ -494,16 +539,20 @@ function SongPickingSection({
           {!mySelection && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-muted-foreground">Need inspiration? Pick a suggestion.</p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleRandomTheme}
-                  disabled={!isHost}
-                  data-testid="button-random-theme"
-                >
-                  Surprise Me
-                </Button>
+                <p className="text-sm text-muted-foreground">
+                  Need inspiration? Pick a suggestion.
+                </p>
+                {!themeSelected && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleRandomTheme}
+                    disabled={!isHost}
+                    data-testid="button-random-theme"
+                  >
+                    Surprise Me
+                  </Button>
+                )}
               </div>
               <div className="flex flex-wrap gap-2">
                 {THEME_SUGGESTIONS.map((suggestion) => (
@@ -602,6 +651,7 @@ export default function GameBoard({
     .map((player) => player as Player)
     .sort((a, b) => a.id.localeCompare(b.id));
   const themeValue = currentRound?.theme ?? "";
+  const themeSelected = themeValue.trim().length > 0;
 
   const roundScores = currentRound?.roundScores ?? {};
   const guesses = currentRound?.guesses ?? {};
@@ -629,11 +679,11 @@ export default function GameBoard({
 
   const canSubmitGuess = Boolean(
     phase === "guessing" &&
-    currentSongOwnerId &&
-    effectivePlayerId &&
-    currentSongOwnerId !== effectivePlayerId &&
-    !hasCorrectGuess &&
-    (rawTimer === null || rawTimer > 0),
+      currentSongOwnerId &&
+      effectivePlayerId &&
+      currentSongOwnerId !== effectivePlayerId &&
+      !hasCorrectGuess &&
+      (rawTimer === null || rawTimer > 0),
   );
 
   const lobbyOrder = G.lobbyOrder ?? [];
@@ -1293,15 +1343,17 @@ export default function GameBoard({
                   <p className="text-sm text-muted-foreground">
                     Need inspiration? Pick a suggestion.
                   </p>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRandomTheme}
-                    disabled={!isHost}
-                    data-testid="button-random-theme"
-                  >
-                    Surprise Me
-                  </Button>
+                  {!themeSelected && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleRandomTheme}
+                      disabled={!isHost}
+                      data-testid="button-random-theme"
+                    >
+                      Surprise Me
+                    </Button>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {THEME_SUGGESTIONS.map((suggestion) => (
@@ -1719,12 +1771,13 @@ export default function GameBoard({
                 {totalLeaderboard.map((player, index) => (
                   <div
                     key={player.id}
-                    className={`flex items-center gap-4 p-6 rounded-lg ${index === 0
+                    className={`flex items-center gap-4 p-6 rounded-lg ${
+                      index === 0
                         ? "bg-primary/20 border-2 border-primary"
                         : index === 1
                           ? "bg-secondary/20 border-2 border-secondary"
                           : "bg-muted/50"
-                      }`}
+                    }`}
                     data-testid={`final-player-${player.id}`}
                   >
                     <div className="text-3xl font-bold w-12">
