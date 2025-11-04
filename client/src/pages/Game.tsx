@@ -300,7 +300,7 @@ function SongPickingSection({
             </CardHeader>
           </Card>
 
-          {!mySelection && (
+          {!themeSelected && !mySelection && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
               <Card className="lg:col-span-1">
                 <CardHeader>
@@ -536,23 +536,21 @@ function SongPickingSection({
               </CardContent>
             </Card>
           )}
-          {!mySelection && (
+          {!themeSelected && !mySelection && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm text-muted-foreground">
                   Need inspiration? Pick a suggestion.
                 </p>
-                {!themeSelected && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRandomTheme}
-                    disabled={!isHost}
-                    data-testid="button-random-theme"
-                  >
-                    Surprise Me
-                  </Button>
-                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleRandomTheme}
+                  disabled={!isHost}
+                  data-testid="button-random-theme"
+                >
+                  Surprise Me
+                </Button>
               </div>
               <div className="flex flex-wrap gap-2">
                 {THEME_SUGGESTIONS.map((suggestion) => (
@@ -1338,12 +1336,12 @@ export default function GameBoard({
                   disabled={!isHost}
                 />
               </div>
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm text-muted-foreground">
-                    Need inspiration? Pick a suggestion.
-                  </p>
-                  {!themeSelected && (
+              {!themeSelected && (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm text-muted-foreground">
+                      Need inspiration? Pick a suggestion.
+                    </p>
                     <Button
                       variant="secondary"
                       size="sm"
@@ -1353,24 +1351,24 @@ export default function GameBoard({
                     >
                       Surprise Me
                     </Button>
-                  )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {THEME_SUGGESTIONS.map((suggestion) => (
+                      <Button
+                        key={suggestion}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleThemeChange(suggestion)}
+                        disabled={!isHost}
+                        className="whitespace-nowrap"
+                      >
+                        {suggestion}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {THEME_SUGGESTIONS.map((suggestion) => (
-                    <Button
-                      key={suggestion}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleThemeChange(suggestion)}
-                      disabled={!isHost}
-                      className="whitespace-nowrap"
-                    >
-                      {suggestion}
-                    </Button>
-                  ))}
-                </div>
-              </div>
+              )}
               {isHost ? (
                 <Button
                   onClick={() => moves.confirmTheme?.()}
@@ -1421,6 +1419,11 @@ export default function GameBoard({
   if (phase === "guessing" && currentSong) {
     const activeSongTitle = (currentSong.customTitle || currentSong.originalTitle || "").trim();
     const characterCountHint = activeSongTitle ? activeSongTitle.replace(/\s+/g, "").length : 0;
+    const hangmanHint = activeSongTitle
+      ? Array.from(activeSongTitle)
+          .map((char) => (/\s/.test(char) ? " " : "_"))
+          .join(" ")
+      : "";
 
     const timerProgress =
       settings.playbackDuration > 0 ? 1 - timeRemaining / settings.playbackDuration : 0;
@@ -1511,10 +1514,20 @@ export default function GameBoard({
             </div>
 
             <Card className="flex min-h-[520px] flex-col">
-              <CardHeader>
+              <CardHeader className="space-y-4">
                 <CardTitle className="flex items-center gap-2 font-heading text-lg">
                   <MessageSquare className="h-4 w-4" /> Guess Log
                 </CardTitle>
+                {hangmanHint && (
+                  <div className="rounded-lg border border-dashed border-muted-foreground/40 bg-muted/30 px-4 py-3 text-center">
+                    <div className="font-mono text-lg uppercase tracking-[0.35em] text-muted-foreground">
+                      {hangmanHint}
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Characters (excluding spaces): {characterCountHint}
+                    </p>
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="flex-1 overflow-hidden px-0 pb-0">
                 {renderGuessLogBody(activeSongGuessLog)}
@@ -1550,11 +1563,6 @@ export default function GameBoard({
                   {!canSubmitGuess && hasCorrectGuess && (
                     <p className="text-sm text-muted-foreground">
                       Great job! You'll rejoin next round.
-                    </p>
-                  )}
-                  {characterCountHint > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Character count hint (excluding spaces): {characterCountHint}
                     </p>
                   )}
                   {lastMyGuess && !hasCorrectGuess && (
