@@ -47,6 +47,8 @@ import {
   Pause,
   Eye,
   EyeOff,
+  Image,
+  ImageOff,
 } from "lucide-react";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 import { SPECTATOR_PLAYER_ID } from "@/game/identity";
@@ -148,6 +150,7 @@ function SongPickingSection({
   const [startSeconds, setStartSeconds] = useState(0);
   const [previewing, setPreviewing] = useState(false);
   const [isVideoHidden, setIsVideoHidden] = useState(false);
+  const [includeThumbnail, setIncludeThumbnail] = useState(true);
   const previewPlayerRef = useRef<any>(null);
   const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
     computeMaxStartSeconds(null, settings.playbackDuration),
@@ -185,6 +188,7 @@ function SongPickingSection({
       setStartSeconds(0);
       setPreviewing(false);
       setIsVideoHidden(false);
+      setIncludeThumbnail(true);
       previewPlayerRef.current = null;
       setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
     },
@@ -218,7 +222,7 @@ function SongPickingSection({
       videoId: selectedVideo.id,
       originalTitle: selectedVideo.title,
       customTitle: decodeHtmlEntities(customTitle),
-      thumbnail: selectedVideo.thumbnail,
+      thumbnail: includeThumbnail ? selectedVideo.thumbnail : "",
       startSeconds,
     });
     toast({ title: "Song selected", description: "Waiting for other players..." });
@@ -227,6 +231,7 @@ function SongPickingSection({
     setStartSeconds(0);
     setPreviewing(false);
     setIsVideoHidden(false);
+    setIncludeThumbnail(true);
     previewPlayerRef.current = null;
     setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
   }, [
@@ -301,6 +306,16 @@ function SongPickingSection({
           </Card>
 
           {!themeSelected && !mySelection && (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                {isHost
+                  ? "Set a theme to unlock song selection."
+                  : "Waiting for the host to choose a theme."}
+              </CardContent>
+            </Card>
+          )}
+
+          {themeSelected && !mySelection && (
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
               <Card className="lg:col-span-1">
                 <CardHeader>
@@ -321,9 +336,7 @@ function SongPickingSection({
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Preview
-                          </span>
+                          <span className="text-sm font-medium text-muted-foreground">Preview</span>
                           <Button
                             type="button"
                             variant="outline"
@@ -358,6 +371,36 @@ function SongPickingSection({
                             <div className="pointer-events-none absolute inset-0 z-10 rounded-lg bg-black" />
                           )}
                         </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-medium text-muted-foreground">
+                            Thumbnail visibility
+                          </span>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIncludeThumbnail((previous) => !previous)}
+                            data-testid="button-toggle-thumbnail-visibility"
+                            aria-pressed={includeThumbnail}
+                          >
+                            {includeThumbnail ? (
+                              <>
+                                <ImageOff className="mr-2 h-4 w-4" />
+                                Hide Thumbnail
+                              </>
+                            ) : (
+                              <>
+                                <Image className="mr-2 h-4 w-4" />
+                                Show Thumbnail
+                              </>
+                            )}
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Decide whether other players see this video\'s thumbnail once you lock it in.
+                        </p>
                       </div>
                       <div className="space-y-3">
                         <div>
