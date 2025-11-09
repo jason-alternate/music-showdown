@@ -45,10 +45,8 @@ import {
   Loader2,
   Play,
   Pause,
-  Eye,
-  EyeOff,
-  Image,
-  ImageOff,
+  Settings,
+  UserX,
 } from "lucide-react";
 import type { BoardIdentityHelpers } from "@/game/GameClient";
 import { SPECTATOR_PLAYER_ID } from "@/game/identity";
@@ -1170,12 +1168,27 @@ export default function GameBoard({
                             )}
                           </div>
                           <div className="flex items-center gap-2">
-                            {slot.isHost && (
-                              <Badge variant="default" className="gap-1" data-testid="badge-host">
-                                <Crown className="w-3 h-3" />
-                                Host
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {slot.isHost ? (
+                                <Badge variant="default" className="gap-1" data-testid="badge-host">
+                                  <Crown className="w-3 h-3" />
+                                  Host
+                                </Badge>
+                              ) : isHost && playerID !== slot.id ? (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    moves.kickPlayer?.(slot.id);
+                                  }}
+                                  title={`Kick ${slot.name}`}
+                                >
+                                  <UserX className="w-3.5 h-3.5" />
+                                </Button>
+                              ) : null}
+                            </div>
                           </div>
                         </>
                       ) : (

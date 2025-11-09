@@ -192,7 +192,11 @@ export function GameClient({ roomCode, defaultRole, board }: GameClientProps) {
       Client({
         game: MusicShowdownGame,
         board: boardWithIdentity,
-        multiplayer: P2P({ isHost: identity.role === "host" }),
+        multiplayer: P2P({
+          isHost: identity.role === "host",
+          onError: (error) => alert(error.message),
+          peerOptions: { secure: true },
+        }),
         numPlayers: MAX_PLAYERS,
         debug: false,
         loading: () => (

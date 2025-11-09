@@ -70,6 +70,7 @@ const proceedToNextSongOrRound = (G: MusicShowdownState, events?: EventsAPI) => 
 export interface MusicShowdownMoves {
   // Lobby phase
   updateSettings: (settings: Partial<GameSettings>) => void;
+  kickPlayer: (playerID: string) => void;
   startGame: () => void;
   setPlayerName: (name: string) => void;
 
@@ -127,6 +128,15 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
           G.settings = { ...G.settings, ...settings };
           G.totalRounds = settings.totalRounds || G.totalRounds;
+        },
+
+        kickPlayer: ({ G, playerID }, targetPlayerID: string) => {
+          const player = G.players[playerID];
+          if (!player?.isHost || !G.players[targetPlayerID] || targetPlayerID === playerID) return;
+
+          // Remove player from the game
+          delete G.players[targetPlayerID];
+          G.lobbyOrder = G.lobbyOrder.filter((id) => id !== targetPlayerID);
         },
 
         startGame: ({ G, playerID, events }) => {

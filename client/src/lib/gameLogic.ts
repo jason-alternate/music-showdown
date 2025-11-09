@@ -23,8 +23,8 @@ export function calculatePoints(
 // Normalize string by removing diacritics and standardizing for comparison
 function normalizeString(str: string): string {
   return str
-    .normalize('NFD') // Decompose accented characters into base + diacritic
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .normalize("NFD") // Decompose accented characters into base + diacritic
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritics
     .toLowerCase()
     .trim();
 }
