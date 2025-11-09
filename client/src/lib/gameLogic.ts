@@ -20,21 +20,29 @@ export function calculatePoints(
   return basePoints + firstBonus + speedBonus;
 }
 
-// Check if guess is correct (case-insensitive, fuzzy matching)
-export function isGuessCorrect(guess: string, answer: string): boolean {
-  const normalizedGuess = guess.toLowerCase().trim();
-  const normalizedAnswer = answer.toLowerCase().trim();
+// Normalize string by removing diacritics and standardizing for comparison
+function normalizeString(str: string): string {
+  return str
+    .normalize('NFD') // Decompose accented characters into base + diacritic
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .toLowerCase()
+    .trim();
+}
 
-  // Exact match
+// Check if guess is correct (case-insensitive, accent-insensitive, fuzzy matching)
+export function isGuessCorrect(guess: string, answer: string): boolean {
+  // Normalize both strings (case-insensitive and accent-insensitive)
+  const normalizedGuess = normalizeString(guess);
+  const normalizedAnswer = normalizeString(answer);
+
+  // Exact match on normalized strings
   if (normalizedGuess === normalizedAnswer) return true;
 
-  // Remove common punctuation and extra spaces
+  // Remove common punctuation and extra spaces for fuzzy matching
   const cleanGuess = normalizedGuess.replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
   const cleanAnswer = normalizedAnswer.replace(/[^\w\s]/g, "").replace(/\s+/g, " ");
 
-  if (cleanGuess === cleanAnswer) return true;
-
-  return false;
+  return cleanGuess === cleanAnswer;
 }
 
 // Generate a random room code
