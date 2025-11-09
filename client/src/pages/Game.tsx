@@ -7,7 +7,7 @@ import {
   type ChangeEvent,
   type JSX,
 } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useBlocker } from "@tanstack/react-router";
 import type { BoardProps } from "boardgame.io/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -608,6 +608,40 @@ export default function GameBoard({
     </div>
   );
 
+  const leaveWarningMessage = useMemo(
+    () =>
+      isHost
+        ? "You are hosting this match. Leaving will disconnect everyone and all game state will be lost."
+        : "Leaving will disconnect you from the match. You will not be able to join back.",
+    [isHost],
+  );
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = leaveWarningMessage;
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [leaveWarningMessage]);
+
+  useBlocker({
+    shouldBlockFn: () => {
+      if (typeof window === "undefined") {
+        return false;
+      }
+      const confirmLeave = window.confirm(leaveWarningMessage);
+      return !confirmLeave;
+    },
+    enableBeforeUnload: false,
+  });
+
+  const seatStatusRef = useRef<{ hadPresence: boolean; pendingRelease: boolean }>({
+    hadPresence: false,
+    pendingRelease: false,
+  });
+
   const ensureLobbyPlayerNameIsRegistered = useCallback(() => {
     if (phase !== "lobby") return;
 
@@ -616,6 +650,8 @@ export default function GameBoard({
 
     const name = identity.playerName.trim();
     if (!name) return;
+
+    if (seatStatusRef.current.pendingRelease) return;
 
     const existing = G.players?.[id] as Player | undefined;
     if (!existing || existing.name !== name || !existing.connected) {
@@ -674,6 +710,39 @@ export default function GameBoard({
     players.forEach((player) => map.set(player.id, player));
     return map;
   }, [players]);
+
+  useEffect(() => {
+    if (phase !== "lobby") {
+      seatStatusRef.current.hadPresence = false;
+      seatStatusRef.current.pendingRelease = false;
+      return;
+    }
+
+    if (identity.role !== "peer" || !effectivePlayerId) {
+      seatStatusRef.current.hadPresence = false;
+      seatStatusRef.current.pendingRelease = false;
+      return;
+    }
+
+    const existing = playersById.get(effectivePlayerId);
+    if (existing) {
+      seatStatusRef.current.hadPresence = true;
+      seatStatusRef.current.pendingRelease = false;
+      return;
+    }
+
+    if (!seatStatusRef.current.hadPresence || seatStatusRef.current.pendingRelease) {
+      return;
+    }
+
+    seatStatusRef.current.pendingRelease = true;
+    toast({
+      title: "Removed from lobby",
+      description: "The host removed you from the room.",
+      variant: "destructive",
+    });
+    releaseSeat();
+  }, [effectivePlayerId, identity.role, phase, playersById, releaseSeat, toast]);
 
   const connectedPlayers = useMemo(() => {
     const list = players.filter((player) => player.connected);
