@@ -283,7 +283,7 @@ function SongPickingSection({
   return (
     <div className="min-h-screen bg-background">
       {headerControls}
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 py-6 md:py-8 max-w-4xl">
         <div className="space-y-6">
           <Card className="bg-primary/10 border-primary">
             <CardHeader>
@@ -1164,7 +1164,7 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-5xl space-y-8">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl space-y-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="space-y-2">
               <h1 className="text-3xl font-heading font-bold">
@@ -1381,7 +1381,7 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-3xl">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-3xl">
           <Card className="mb-6">
             <CardHeader>
               <CardTitle className="font-heading text-2xl">Set the Theme</CardTitle>
@@ -1486,7 +1486,12 @@ export default function GameBoard({
     const activeSongTitle = (currentSong.customTitle || currentSong.originalTitle || "").trim();
     const hangmanHint = activeSongTitle
       ? Array.from(activeSongTitle)
-          .map((char) => (/\s/.test(char) ? " " : "_"))
+          .map((char) => {
+            if (/\s/.test(char)) return " ";
+            const isLetter = char.toLocaleLowerCase() !== char.toLocaleUpperCase();
+            const isDigit = /\d/.test(char);
+            return isLetter || isDigit ? "_" : char;
+          })
           .join("")
       : "";
 
@@ -1496,7 +1501,7 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-5xl space-y-6">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl space-y-6">
           <Card className="bg-accent/10 border-accent">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -1579,7 +1584,7 @@ export default function GameBoard({
               </Card>
             </div>
 
-            <Card className="flex min-h-[520px] flex-col">
+            <Card className="flex min-h-[460px] md:min-h-[520px] flex-col">
               <CardHeader className="space-y-4">
                 <CardTitle className="flex items-center gap-2 font-heading text-lg">
                   <MessageSquare className="h-4 w-4" /> Guess Log
@@ -1651,7 +1656,7 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-4xl space-y-6">
           <Card className="bg-secondary/10 border-secondary">
             <CardHeader>
               <div className="flex flex-col gap-2 text-center">
@@ -1713,7 +1718,7 @@ export default function GameBoard({
               </CardContent>
             </Card>
 
-            <Card className="flex min-h-[520px] flex-col">
+            <Card className="flex min-h-[460px] md:min-h-[520px] flex-col">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 font-heading text-lg">
                   <MessageSquare className="h-4 w-4" /> Guess Log
@@ -1762,7 +1767,7 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-4xl space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="font-heading text-2xl text-center">Round Complete!</CardTitle>
@@ -1822,7 +1827,7 @@ export default function GameBoard({
     return (
       <div className="min-h-screen bg-background">
         {headerControls}
-        <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+        <div className="container mx-auto px-4 py-6 md:py-8 max-w-4xl space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="font-heading text-3xl text-center">Game Over!</CardTitle>
@@ -1899,7 +1904,7 @@ export default function GameBoard({
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-primary/10 via-background to-secondary/10">
       {headerControls}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_theme(colors.primary/15),transparent_60%)]" />
-      <div className="relative flex min-h-screen flex-col items-center justify-center px-6 py-16">
+      <div className="relative flex min-h-screen flex-col items-center justify-center px-6 py-12 md:py-16">
         <div className="w-full max-w-md space-y-6 rounded-3xl border border-border/50 bg-background/90 p-10 text-center shadow-xl backdrop-blur">
           <div className="flex items-center justify-center">
             <Loader2 className="h-12 w-12 animate-spin text-primary" />
