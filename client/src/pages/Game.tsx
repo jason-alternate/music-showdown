@@ -129,6 +129,53 @@ interface SongPickingSectionProps {
   toast: ReturnType<typeof useToast>["toast"];
 }
 
+interface PlayerLockStatusListProps {
+  players: Player[];
+  songSelections: Partial<Record<string, SongSelection>>;
+  className?: string;
+}
+
+function PlayerLockStatusList({ players, songSelections, className }: PlayerLockStatusListProps) {
+  if (players.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className={cn("space-y-3", className)}>
+      <p className="text-sm font-medium text-foreground">Player lock-in status</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {players.map((player) => {
+          const isLockedIn = Boolean(songSelections[player.id]);
+          const displayName = player.name?.trim() || `Player ${player.id}`;
+          return (
+            <div
+              key={player.id}
+              className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
+              data-testid={`player-lock-status-${player.id}`}
+            >
+              <div className="flex items-center gap-2">
+                <PlayerAvatar playerId={player.id} playerName={player.name} size="sm" />
+                <span className="text-sm font-medium text-foreground">{displayName}</span>
+              </div>
+              {isLockedIn ? (
+                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
+                  <CheckCircle className="h-3 w-3" />
+                  Locked In
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                  <Circle className="h-3 w-3" />
+                  Waiting
+                </Badge>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function SongPickingSection({
   headerControls,
   currentRound,
@@ -148,6 +195,7 @@ function SongPickingSection({
   const [startSeconds, setStartSeconds] = useState(0);
   const [previewing, setPreviewing] = useState(false);
   const previewPlayerRef = useRef<any>(null);
+  const [titleInputTouched, setTitleInputTouched] = useState(false);
   const [maxStartSeconds, setMaxStartSeconds] = useState(() =>
     computeMaxStartSeconds(null, settings.playbackDuration),
   );
@@ -156,6 +204,23 @@ function SongPickingSection({
   const connectedPlayers = useMemo(() => {
     return Array.from(playerLookup.values()).filter((player) => player.connected);
   }, [playerLookup]);
+  const otherPlayersStillSelecting = useMemo(() => {
+    if (!effectivePlayerId) return false;
+    return connectedPlayers.some(
+      (player) => player.id !== effectivePlayerId && !songSelections[player.id],
+    );
+  }, [connectedPlayers, effectivePlayerId, songSelections]);
+  const canUnlockSelection = Boolean(
+    mySelection && otherPlayersStillSelecting && moves.unlockSongSelection,
+  );
+  const handleUnlockSelection = useCallback(() => {
+    if (!moves.unlockSongSelection || !otherPlayersStillSelecting) return;
+    moves.unlockSongSelection();
+    toast({
+      title: "Selection unlocked",
+      description: "Pick a different song before the others finish.",
+    });
+  }, [moves, otherPlayersStillSelecting, toast]);
 
   const updatePlaybackBounds = useCallback(() => {
     const duration = previewPlayerRef.current?.getDuration?.();
@@ -181,6 +246,7 @@ function SongPickingSection({
     (video: YouTubeVideo) => {
       setSelectedVideo(video);
       setCustomTitle(decodeHtmlEntities(video.title));
+      setTitleInputTouched(false);
       setStartSeconds(0);
       setPreviewing(false);
       previewPlayerRef.current = null;
@@ -191,7 +257,7 @@ function SongPickingSection({
 
   const handleConfirmSong = useCallback(() => {
     const trimmed = customTitle.trim();
-    if (!selectedVideo || !trimmed || !currentRound) return;
+    if (!selectedVideo || !trimmed || !currentRound || !titleInputTouched) return;
 
     const conflictingEntry = Object.entries(currentRound.songSelections ?? {}).find(
       ([playerId, selection]) =>
@@ -226,6 +292,7 @@ function SongPickingSection({
     setPreviewing(false);
     previewPlayerRef.current = null;
     setMaxStartSeconds(computeMaxStartSeconds(null, settings.playbackDuration));
+    setTitleInputTouched(false);
   }, [
     customTitle,
     currentRound,
@@ -236,6 +303,7 @@ function SongPickingSection({
     settings.playbackDuration,
     startSeconds,
     toast,
+    titleInputTouched,
   ]);
 
   const togglePreview = useCallback(() => {
@@ -318,6 +386,12 @@ function SongPickingSection({
                 </CardContent>
               </Card>
 
+              <PlayerLockStatusList
+                players={connectedPlayers.filter((player) => player.id !== effectivePlayerId)}
+                songSelections={songSelections}
+                className="lg:col-span-2"
+              />
+
               <Card className="self-start">
                 <CardHeader>
                   <CardTitle className="font-heading">Selected Song</CardTitle>
@@ -347,7 +421,11 @@ function SongPickingSection({
                           <Input
                             id="song-title"
                             value={customTitle}
-                            onChange={(event) => setCustomTitle(event.target.value)}
+                            onFocus={() => setTitleInputTouched(true)}
+                            onChange={(event) => {
+                              setCustomTitle(event.target.value);
+                              setTitleInputTouched(true);
+                            }}
                             className="mt-2"
                             placeholder="Edit the title if needed..."
                             data-testid="input-song-title"
@@ -415,7 +493,7 @@ function SongPickingSection({
                         <Button
                           onClick={handleConfirmSong}
                           className="w-full"
-                          disabled={!customTitle.trim()}
+                          disabled={!customTitle.trim() || !titleInputTouched}
                           data-testid="button-confirm-song"
                         >
                           Confirm Selection
@@ -472,49 +550,17 @@ function SongPickingSection({
                 <p className="text-sm text-muted-foreground" data-testid="text-waiting-selection">
                   Waiting for other players to finish picking.
                 </p>
-                {connectedPlayers.length > 0 && (
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-foreground">Player lock-in status</p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {connectedPlayers.map((player) => {
-                        const isLockedIn = Boolean(songSelections[player.id]);
-                        const displayName = player.name?.trim() || `Player ${player.id}`;
-                        return (
-                          <div
-                            key={player.id}
-                            className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2"
-                            data-testid={`player-lock-status-${player.id}`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <PlayerAvatar
-                                playerId={player.id}
-                                playerName={player.name}
-                                size="sm"
-                              />
-                              <span className="text-sm font-medium text-foreground">
-                                {displayName}
-                              </span>
-                            </div>
-                            {isLockedIn ? (
-                              <Badge
-                                variant="secondary"
-                                className="flex items-center gap-1 text-xs"
-                              >
-                                <CheckCircle className="h-3 w-3" />
-                                Locked In
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="flex items-center gap-1 text-xs">
-                                <Circle className="h-3 w-3" />
-                                Waiting
-                              </Badge>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {canUnlockSelection && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleUnlockSelection}
+                    data-testid="button-unlock-selection"
+                  >
+                    Change selection
+                  </Button>
                 )}
+                <PlayerLockStatusList players={connectedPlayers} songSelections={songSelections} />
               </CardContent>
             </Card>
           )}
@@ -1883,14 +1929,6 @@ export default function GameBoard({
                   disabled={!isHost}
                 >
                   Restart Lobby
-                </Button>
-                <Button
-                  className="flex-1"
-                  data-testid="button-back-home"
-                  onClick={handleEndGame}
-                  disabled={!isHost}
-                >
-                  End Session
                 </Button>
               </div>
             </CardContent>

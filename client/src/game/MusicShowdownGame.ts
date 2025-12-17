@@ -239,6 +239,21 @@ export const MusicShowdownGame: Game<MusicShowdownState> = {
 
           round.songSelections[playerID] = selection;
         },
+        unlockSongSelection: ({ G, playerID }) => {
+          const round = G.currentRound;
+          if (!round || !round.songSelections[playerID]) return;
+
+          const connectedPlayers = Object.values(G.players).filter((player) => player.connected);
+          const otherPlayersStillSelecting = connectedPlayers.some(
+            (player) => player.id !== playerID && !round.songSelections[player.id],
+          );
+
+          if (!otherPlayersStillSelecting) {
+            return;
+          }
+
+          delete round.songSelections[playerID];
+        },
       },
 
       endIf: ({ G }) => {
